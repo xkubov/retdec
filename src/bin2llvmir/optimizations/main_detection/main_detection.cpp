@@ -127,7 +127,7 @@ void MainDetection::removeStaticallyLinked()
 retdec::utils::Address MainDetection::getFromFunctionNames()
 {
 	// Order is important: first -> highest priority, last -> lowest  priority.
-	std::vector<std::string> names = {"main", "_main", "wmain", "WinMain"};
+	std::vector<std::string> names = {"main", "_main", "wmain", "_wmain", "WinMain"};
 	std::pair<Address, unsigned> ret = {Address(), names.size()};
 
 	for (auto& p : _config->getConfig().functions)
