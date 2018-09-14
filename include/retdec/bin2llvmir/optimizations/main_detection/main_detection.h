@@ -39,6 +39,7 @@ class MainDetection : public llvm::ModulePass
 		retdec::utils::Address getFromFunctionNames();
 		retdec::utils::Address getFromContext();
 		retdec::utils::Address getFromEntryPointOffset(int offset);
+		retdec::utils::Address getFromAddressOffset(retdec::utils::Address& a, int offset);
 		retdec::utils::Address getFromCrtSetCheckCount();
 		retdec::utils::Address getFromInterlockedExchange();
 

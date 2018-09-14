@@ -283,6 +283,14 @@ retdec::utils::Address MainDetection::getFromContext()
 					mainAddr = getFromEntryPointOffset(-0xC8);
 				}
 			}
+			else if (ci.isMsvc("14.0"))
+			{
+				if (mainAddr.isUndefined())
+				{
+					auto mainCall = getFromEntryPointOffset(0xD);
+					mainAddr = getFromAddressOffset(mainCall, 0x118);
+				}
+			}
 			else if (ci.isMsvc())
 			{
 				if (mainAddr.isUndefined())
@@ -403,16 +411,24 @@ retdec::utils::Address MainDetection::getFromContext()
  */
 retdec::utils::Address MainDetection::getFromEntryPointOffset(int offset)
 {
-	Address mainAddr;
 	Address ep = _config->getConfig().getEntryPoint();
-	Address jmpMainAddr = ep + offset;
-	auto ai = AsmInstruction(_module, jmpMainAddr);
+
+	return getFromAddressOffset(ep, offset);
+}
+
+retdec::utils::Address MainDetection::getFromAddressOffset(retdec::utils::Address& a, int offset)
+{
+	Address addr;
+	Address jmpAddr = a + offset;
+
+	auto ai = AsmInstruction(_module, jmpAddr);
 	auto* c = ai.getInstructionFirst<CallInst>();
 	if (c && c->getCalledFunction())
 	{
-		mainAddr = _config->getFunctionAddress(c->getCalledFunction());
+		addr = _config->getFunctionAddress(c->getCalledFunction());
 	}
-	return mainAddr;
+
+	return addr;
 }
 
 /**
