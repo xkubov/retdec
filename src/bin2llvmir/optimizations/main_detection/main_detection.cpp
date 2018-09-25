@@ -288,7 +288,20 @@ retdec::utils::Address MainDetection::getFromContext()
 				if (mainAddr.isUndefined())
 				{
 					auto mainCall = getFromEntryPointOffset(0xD);
-					mainAddr = getFromAddressOffset(mainCall, 0x118);
+
+					mainAddr = getFromAddressOffset(mainCall, 0xF4);
+				}
+				if (mainAddr.isUndefined())
+				{
+					auto jmpCall = getFromEntryPointOffset(0x0);
+					auto mainCall = getFromAddressOffset(jmpCall, 0x5);
+
+					std::cout << "?? "  << mainCall << std::endl;
+
+					mainAddr = getFromAddressOffset(mainCall, 0xF4);
+
+					std::cout << "!! "  << mainAddr << std::endl;
+
 				}
 			}
 			else if (ci.isMsvc())
