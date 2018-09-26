@@ -1159,56 +1159,17 @@ void EqSet::propagate(llvm::Module* module)
 	for (auto& vs : valSet)
 	{
 		Type* valueType = vs.getTypeForPropagation();
-
-		if (vs.priority < masterType.priority)
+		auto* r = getHigherPriorityType(module, masterType.type, valueType);
+		if (r == valueType)
 		{
-			continue;
-		}
-		else if (vs.priority == masterType.priority)
-		{
-			if (valueType != masterType.type && masterType.priority != eSourcePriority::PRIORITY_NONE)
-			{
-				LOG << "[WARNING] same priority types differ: "
-					<< llvmObjToString(valueType) << " vs. "
-					<< llvmObjToString(masterType.type) << std::endl;
-			}
-
-			auto* r = getHigherPriorityType(module, masterType.type, valueType);
-			if (r == valueType)
-			{
-				masterType.type = valueType;
-			}
-		}
-		else if (vs.priority > masterType.priority)
-		{
-			masterType.priority = vs.priority;
 			masterType.type = valueType;
 		}
 	}
 	for (auto& ts : typeSet)
 	{
-		if (ts.priority < masterType.priority)
+		auto* r = getHigherPriorityType(module, masterType.type, ts.type);
+		if (r == ts.type)
 		{
-			continue;
-		}
-		else if (ts.priority == masterType.priority)
-		{
-			if (ts.type != masterType.type && masterType.priority != eSourcePriority::PRIORITY_NONE)
-			{
-				LOG << "[WARNING] same priority types differ: "
-					<< llvmObjToString(ts.type) << " vs. "
-					<< llvmObjToString(masterType.type) << std::endl;
-			}
-
-			auto* r = getHigherPriorityType(module, masterType.type, ts.type);
-			if (r == ts.type)
-			{
-				masterType.type = ts.type;
-			}
-		}
-		else if (ts.priority > masterType.priority)
-		{
-			masterType.priority = ts.priority;
 			masterType.type = ts.type;
 		}
 	}
