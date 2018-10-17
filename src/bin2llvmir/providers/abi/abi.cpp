@@ -306,7 +306,7 @@ Abi* AbiProvider::addAbi(
 		auto p = _module2abi.emplace(m, std::make_unique<AbiPowerpc>(m, c));
 		return p.first->second.get();
 	}
-	else if (c->getConfig().architecture.isX64())
+	else if (c->getConfig().architecture.isX86_64())
 	{
 		bool isMinGW = c->getConfig().tools.isGcc()
 				&& c->getConfig().fileFormat.isPe();
