@@ -230,6 +230,10 @@ bool IdiomsAnalysis::doAnalysis(Function & f, Pass * p) {
 											"IdiomsLLVM::exchangeIsGreaterThanMinusOne");
 
 		// all arch
+		change_made |= analyse(bb, &IdiomsCommon::exchangeBitShiftCast,
+									"IdiomsCommon::exchangeBitShiftCast");
+
+		// all arch
 		// all compilers
 		change_made |= analyse(bb, &IdiomsCommon::exchangeBitShiftSDiv1,
 									"IdiomsCommon::exchangeBitShiftSDiv1");

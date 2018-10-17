@@ -381,5 +381,57 @@ Instruction * IdiomsCommon::exchangeSignedModulo2n(BasicBlock::iterator iter) co
 	return BinaryOperator::CreateSRem(op_x, NewCst);
 }
 
+/**
+ * Exchange (X << (2^n)) >> (2^n) ---> X & 2^n-1 or zext (trunc X to i(2^n)) to X.type
+ *
+ * @param iter value to visit
+ * @return replaced Instruction, otherwise nullptr
+ */
+llvm::Instruction * IdiomsCommon::exchangeBitShiftCast(llvm::BasicBlock::iterator iter) const
+{
+	Instruction & val = (*iter);
+	Value * op_shl = nullptr;
+	Value * op = nullptr;
+	ConstantInt * cnst1 = nullptr;
+	ConstantInt * cnst2 = nullptr;
+
+	LLVMContext & Context = getModule()->getContext();
+	const DataLayout & dl = getModule()->getDataLayout();
+
+	// Y >> n
+	if (!(match(&val, m_AShr(m_Value(op_shl), m_ConstantInt(cnst1))) &&
+			isPowerOfTwoRepresentable(cnst1)))
+		return nullptr;
+
+	// Y = (X << n)
+	if (!(match(op_shl, m_Shl(m_Value(op), m_ConstantInt(cnst2))) &&
+			isPowerOfTwoRepresentable(cnst2)))
+		return nullptr;
+
+	// (X << n) >> m => m = n
+	if (*cnst1->getValue().getRawData() != *cnst2->getValue().getRawData())
+		return nullptr;
+
+	Type *truncTo = nullptr;
+	auto shiftSize = *cnst1->getValue().getRawData();
+
+	if (shiftSize == 8)
+		truncTo = Type::getInt8Ty(Context);
+	else if (shiftSize == 16)
+		truncTo = Type::getInt16Ty(Context);
+	else if (shiftSize == 32)
+		truncTo = Type::getInt32Ty(Context);
+	else
+		return nullptr;
+
+	if (dl.getTypeSizeInBits(truncTo) >= dl.getTypeSizeInBits(op->getType()))
+		return nullptr;
+
+	auto trunc = TruncInst::Create(Instruction::Trunc, op, truncTo);
+	val.getParent()->getInstList().insert(iter, trunc);
+
+	return ZExtInst::Create(Instruction::ZExt, trunc, val.getType());
+}
+
 } // namespace bin2llvmir
 } // namespace retdec

@@ -26,6 +26,7 @@ protected:
 	llvm::Instruction * exchangeBitShiftSDiv2(llvm::BasicBlock::iterator iter) const;
 	llvm::Instruction * exchangeBitShiftUDiv(llvm::BasicBlock::iterator iter) const;
 	llvm::Instruction * exchangeBitShiftMul(llvm::BasicBlock::iterator iter) const;
+	llvm::Instruction * exchangeBitShiftCast(llvm::BasicBlock::iterator iter) const;
 	llvm::Instruction * exchangeSignedModulo2n(llvm::BasicBlock::iterator iter) const;
 };
 
