@@ -16,6 +16,19 @@ namespace bin2llvmir {
  */
 STATISTIC(NumIdioms, "Number of idioms exchanged in total");
 
+void IdiomsAnalysis::removeOperand(llvm::Value *op) const
+{
+	if (isa<Instruction>(op)) {
+		if (op->getNumUses() == 1) {
+			auto inst = cast<Instruction>(op);
+			for (auto op = inst->op_begin(), end = inst->op_end(); op != end ; op++)
+				removeOperand(op->get());
+
+			inst->eraseFromParent();
+		}
+	}
+}
+
 /**
  * Analyse given BasicBlock and use instruction exchanger to transform
  * instruction idioms
@@ -54,6 +67,10 @@ bool IdiomsAnalysis::analyse(llvm::BasicBlock & bb, llvm::Instruction * (IdiomsA
 				insn = InstParent->getFirstInsertionPt();
 
 			InstParent->getInstList().insert(insn, res);
+
+			// Remove all operands of instruction if they are not used
+			for (auto op = (*insn).op_begin(), end = (*insn).op_end(); op != end ; op++)
+				removeOperand(op->get());
 
 			(*insn).eraseFromParent();
 		}
