@@ -55,6 +55,8 @@ private:
 	bool analyse(llvm::Function & f, llvm::Pass * p, int (IdiomsAnalysis::*exchanger)(llvm::Function &, llvm::Pass *) const, const char * fname);
 	bool analyse(llvm::BasicBlock & bb, llvm::Instruction * (IdiomsAnalysis::*exchanger)(llvm::BasicBlock::iterator) const, const char * fname);
 
+	void removeOperand(llvm::Value *op) const;
+
 	void print_dbg(const char * str, const llvm::Instruction & i) const {
 		DEBUG(llvm::errs() << str << " detected an idiom starting at " << i.getName() << "\n");
 	}
