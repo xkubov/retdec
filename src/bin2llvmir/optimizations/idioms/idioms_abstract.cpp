@@ -40,24 +40,6 @@ bool IdiomsAbstract::findBranchDependingOn(llvm::BranchInst ** br, llvm::BasicBl
 }
 
 /**
- * Look for instruction by value and erase it from module.
- *
- * @param val instruction value to look for
- * @param bb BasicBlock to erase instruction from
- * @return void
- */
-void IdiomsAbstract::eraseInstFromBasicBlock(llvm::Value * val, llvm::BasicBlock * bb) {
-	for (llvm::BasicBlock::iterator end = bb->end(), i = bb->begin(); i != end; ++i) {
-		llvm::Value * rem = static_cast<llvm::Value*>(&(*i));
-		if (val == rem) {
-			rem->replaceAllUsesWith(llvm::UndefValue::get(val->getType()));
-			(*i).eraseFromParent();
-			break;
-		}
-	}
-}
-
-/**
  * Is value a power of two?
  * @param x value to be check
  * @return true if value is power of two or zero

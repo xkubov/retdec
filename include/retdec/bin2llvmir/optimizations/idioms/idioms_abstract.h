@@ -39,7 +39,6 @@ protected:
 
 	bool findBranchDependingOn(llvm::BranchInst ** br, llvm::BasicBlock & bb,
 		const llvm::Value * val) const;
-	static void eraseInstFromBasicBlock(llvm::Value * val, llvm::BasicBlock * bb);
 	static bool isPowerOfTwo(unsigned x);
 	static bool isPowerOfTwoRepresentable(const llvm::ConstantInt *cnst);
 };

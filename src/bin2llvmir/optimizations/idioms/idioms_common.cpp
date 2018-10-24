@@ -92,9 +92,6 @@ Instruction * IdiomsCommon::exchangeGreaterEqualZero(BasicBlock::iterator iter) 
 			Instruction * cmp = CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_SGE, op1, NewCst);
 			val.getParent()->getInstList().insert(iter, cmp);
 
-			// erase lshr
-			eraseInstFromBasicBlock(op0, val.getParent());
-
 			return CastInst::CreateZExtOrBitCast(cmp, val.getType());
 		}
 	}
@@ -128,7 +125,6 @@ Instruction * IdiomsCommon::exchangeBitShiftSDiv1(BasicBlock::iterator iter) con
 	Instruction & val = (*iter);
 	Value * op_var1 = nullptr;
 	Value * op_var2 = nullptr;
-	Value * op_or = nullptr;
 	Value * op_and = nullptr;
 	Value * op_lshr = nullptr;
 	Value * op_ashr = nullptr;
@@ -181,11 +177,6 @@ Instruction * IdiomsCommon::exchangeBitShiftSDiv1(BasicBlock::iterator iter) con
 	unsigned shift = *cnst->getValue().getRawData();
 	Constant *NewCst = ConstantInt::get(val.getType(), pow(2, shift));
 	Instruction *res = BinaryOperator::CreateSDiv(op_var1, NewCst);
-
-	eraseInstFromBasicBlock(op_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_and, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_or, val.getParent());
 
 	return res;
 }
@@ -294,15 +285,6 @@ Instruction * IdiomsCommon::exchangeDivByMinusTwo(BasicBlock::iterator iter) con
 						Constant *NewCst = ConstantInt::get(op_x->getType(), -2);
 						Instruction * ret = BinaryOperator::CreateSDiv(op_x, NewCst);
 
-						eraseInstFromBasicBlock(op_add, val.getParent());
-						eraseInstFromBasicBlock(op_ashr, val.getParent());
-
-						// which one is lshr? erase it!
-						if (op_x == op_add_op1)
-							eraseInstFromBasicBlock(op_add_op2, val.getParent());
-						else
-							eraseInstFromBasicBlock(op_add_op1, val.getParent());
-
 						return ret;
 					}
 				}
@@ -370,12 +352,6 @@ Instruction * IdiomsCommon::exchangeSignedModulo2n(BasicBlock::iterator iter) co
 		return nullptr;
 
 	// now exchange the idiom
-	eraseInstFromBasicBlock(op_and, val.getParent());
-	eraseInstFromBasicBlock(op_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_add, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_lshr1, val.getParent());
-	eraseInstFromBasicBlock(op_ashr1, val.getParent());
 
 	Constant *NewCst = ConstantInt::get(op_x->getType(), *op_n->getValue().getRawData() + 1);
 	return BinaryOperator::CreateSRem(op_x, NewCst);

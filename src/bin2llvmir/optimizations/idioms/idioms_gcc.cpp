@@ -118,10 +118,6 @@ Instruction * IdiomsGCC::exchangeSignedModuloByTwo(BasicBlock::iterator iter) co
 		return nullptr;
 
 	// now exchange the idiom
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_lshr2, val.getParent());
-	eraseInstFromBasicBlock(op_add, val.getParent());
-	eraseInstFromBasicBlock(op_and, val.getParent());
 
 	Constant *NewCst = ConstantInt::get(op_x->getType(), 2);
 	return BinaryOperator::CreateSRem(op_x, NewCst);
@@ -164,9 +160,6 @@ Instruction * IdiomsGCC::exchangeCondBitShiftDiv1(BasicBlock::iterator iter) con
 		return nullptr;
 
 	// now exchange the idiom
-	eraseInstFromBasicBlock(op_add, val.getParent());
-	eraseInstFromBasicBlock(op_select, val.getParent());
-	eraseInstFromBasicBlock(op_cmp, val.getParent());
 
 	unsigned shift = *cnst->getValue().getRawData();
 	Constant *NewCst = ConstantInt::get(val.getType(), pow(2, shift));
@@ -210,10 +203,6 @@ Instruction * IdiomsGCC::exchangeCondBitShiftDiv2(BasicBlock::iterator iter) con
 		return nullptr;
 
 	// now exchange the idiom
-	eraseInstFromBasicBlock(op_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_and, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_or, val.getParent());
 
 	unsigned shift = *cnst->getValue().getRawData();
 	Constant *NewCst = ConstantInt::get(val.getType(), -pow(2, shift));
@@ -252,9 +241,6 @@ Instruction * IdiomsGCC::exchangeCondBitShiftDiv3(BasicBlock::iterator iter) con
 		return nullptr;
 
 	// now exchange the idiom
-	eraseInstFromBasicBlock(op_and, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_or, val.getParent());
 
 	unsigned shift = *cnst->getValue().getRawData();
 	Constant *NewCst = ConstantInt::get(val.getType(), -pow(2, shift));
@@ -429,10 +415,6 @@ int IdiomsGCC::exchangeCondBitShiftDivMultiBB(Function & f, Pass * pass) const {
 
 							if_true_bb = &(*m);
 
-							eraseInstFromBasicBlock(op_add,  if_true_bb);
-							eraseInstFromBasicBlock(op_or,   if_true_bb);
-							eraseInstFromBasicBlock(op_add2, if_true_bb);
-
 							end = true;
 						}
 					}
@@ -458,8 +440,6 @@ int IdiomsGCC::exchangeCondBitShiftDivMultiBB(Function & f, Pass * pass) const {
 								num_idioms++;
 
 								// op_n is use of srem, do not erase it!
-								eraseInstFromBasicBlock(op_icmp,   &(*bb));
-								eraseInstFromBasicBlock(op_and,    &(*bb));
 
 								return num_idioms;
 							}
@@ -570,10 +550,6 @@ Instruction * IdiomsGCC::exchangeCopysign(BasicBlock::iterator iter) const {
 	CallInst * call = CallInst::Create(fun, args);
 
 	Instruction * ret_cast = CastInst::Create(Instruction::BitCast, call, Type::getInt32Ty(Context));
-
-	// erase substituted idiom
-	eraseInstFromBasicBlock(op_and1, val.getParent());
-	eraseInstFromBasicBlock(op_and2, val.getParent());
 
 	// insert in reverse order
 	val.getParent()->getInstList().insert(iter, b_cast);

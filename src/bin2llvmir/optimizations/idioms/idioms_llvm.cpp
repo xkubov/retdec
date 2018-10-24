@@ -42,8 +42,6 @@ Instruction * IdiomsLLVM::exchangeIsGreaterThanMinusOne(BasicBlock::iterator ite
 	if (*cnst->getValue().getRawData() != 0x80000000)
 		return nullptr;
 
-	eraseInstFromBasicBlock(op_and, val.getParent());
-
 	Constant *NewCst = ConstantInt::get(op_x->getType(), -1);
 	return CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_SGT, op_x, NewCst);
 }
@@ -72,8 +70,6 @@ Instruction * IdiomsLLVM::exchangeCompareEq(BasicBlock::iterator iter) const {
 
 	if (! match(op_xor, m_Xor(m_Value(op_a), m_Value(op_b))))
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_xor, val.getParent());
 
 	return CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_EQ, op_a, op_b);
 }
@@ -112,7 +108,6 @@ Instruction * IdiomsLLVM::exchangeCompareSlt(BasicBlock::iterator iter) const {
 	Value * op1;
 	Value * op_a;
 	Value * op_b;
-	Value * op_not;
 
 	// This idiom is applicable only if i1 is used!
 	if (! val.getType()->isIntegerTy(1))
@@ -124,16 +119,12 @@ Instruction * IdiomsLLVM::exchangeCompareSlt(BasicBlock::iterator iter) const {
 
 	if (! match(op0, m_Not(m_Value(op_a)))) {
 		op_b = op0;
-		op_not = op1;
 
 		if (! match(op1, m_Not(m_Value(op_a))))
 			return nullptr;
 	} else {
-		op_not = op0;
 		op_b = op1;
 	}
-
-	eraseInstFromBasicBlock(op_not, val.getParent());
 
 	return CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_SLT, op_a, op_b);
 }
@@ -150,7 +141,6 @@ Instruction * IdiomsLLVM::exchangeCompareSle(BasicBlock::iterator iter) const {
 	Value * op1;
 	Value * op_a;
 	Value * op_b;
-	Value * op_not;
 
 	// This idiom is applicable only if i1 is used!
 	if (! val.getType()->isIntegerTy(1))
@@ -161,17 +151,13 @@ Instruction * IdiomsLLVM::exchangeCompareSle(BasicBlock::iterator iter) const {
 		return nullptr;
 
 	if (! match(op0, m_Not(m_Value(op_a)))) {
-		op_not = op1;
 		op_b = op0;
 
 		if (! match(op1, m_Not(m_Value(op_a))))
 			return nullptr;
 	} else {
-		op_not = op0;
 		op_b = op1;
 	}
-
-	eraseInstFromBasicBlock(op_not, val.getParent());
 
 	return CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_SLE, op_a, op_b);
 }

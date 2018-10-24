@@ -209,7 +209,6 @@ Instruction * IdiomsMagicDivMod::magicUnsignedDiv1(BasicBlock::iterator iter) co
 	 *
 	 */
 	Instruction & val = (*iter);
-	Value * op_trunc   = nullptr;
 	Value * op_lshr    = nullptr;
 	Value * op_mul     = nullptr;
 	Value * op_zext    = nullptr;
@@ -232,11 +231,6 @@ Instruction * IdiomsMagicDivMod::magicUnsignedDiv1(BasicBlock::iterator iter) co
 
 	if (! match(op_zext, m_ZExt(m_Value(op_var))))
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_zext, val.getParent());
 
 	unsigned divisor = divisorByMagicNumberUnsigned2(*mn->getValue().getRawData(), shift);
 	Constant *NewCst = ConstantInt::get(op_var->getType(), divisor);
@@ -354,13 +348,6 @@ Instruction * IdiomsMagicDivMod::magicUnsignedDiv2(BasicBlock::iterator iter) co
 	if (op_lshr_tmp != op_lshr2)
 		return nullptr;
 
-	eraseInstFromBasicBlock(op_sub, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr1, val.getParent());
-	eraseInstFromBasicBlock(op_lshr2, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_zext, val.getParent());
-
 	unsigned divisor = divisorByMagicNumberUnsigned(*mn->getValue().getRawData(), shift2, shift);
 	Constant *NewCst = ConstantInt::get(op_var->getType(), divisor);
 	BinaryOperator *div = BinaryOperator::CreateUDiv(op_var, NewCst);
@@ -459,14 +446,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv1(BasicBlock::iterator iter) cons
 	if (! match(op_sext, m_SExt(m_Value(op_var))))
 		return nullptr;
 
-	eraseInstFromBasicBlock(op_ashr1, val.getParent());
-	eraseInstFromBasicBlock(op_ashr2, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_add, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
-
 	int divisor = divisorByMagicNumberSigned2(*mn->getValue().getRawData(), shift);
 
 	Constant *NewCst = ConstantInt::get(op_var->getType(), divisor);
@@ -561,13 +540,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv2(BasicBlock::iterator iter) cons
 
 	if (! match(op_sext, m_SExt(m_Value(op_var))))
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_ashr1, val.getParent());
-	eraseInstFromBasicBlock(op_ashr2, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
 
 	int divisor = divisorByMagicNumberSigned(*mn->getValue().getRawData(), shift);
 
@@ -665,13 +637,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv3(BasicBlock::iterator iter) cons
 
 	if (! match(op_sext, m_SExt(m_Value(op_var))))
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_ashr1, val.getParent());
-	eraseInstFromBasicBlock(op_ashr2, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
 
 	// note negative sign!
 	int divisor = - divisorByMagicNumberSigned(*mn->getValue().getRawData(), shift);
@@ -775,14 +740,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv4(BasicBlock::iterator iter) cons
 	if (! match(op_sext, m_SExt(m_Value(op_var))))
 		return nullptr;
 
-	eraseInstFromBasicBlock(op_ashr1, val.getParent());
-	eraseInstFromBasicBlock(op_ashr2, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
-	eraseInstFromBasicBlock(op_add, val.getParent());
-
 	// note negative sign!
 	int divisor = - divisorByMagicNumberSigned2(*mn->getValue().getRawData(), shift);
 
@@ -870,12 +827,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv5(BasicBlock::iterator iter) cons
 	if (! match(op_sext, m_SExt(m_Value(op_var))))
 		return nullptr;
 
-	eraseInstFromBasicBlock(op_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
-
 	// note negative sign!
 	int divisor = - divisorByMagicNumberSigned(*mn->getValue().getRawData(), 0);
 
@@ -960,12 +911,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv6(BasicBlock::iterator iter) cons
 
 	if (! match(op_sext, m_SExt(m_Value(op_var))))
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_ashr2, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
 
 	int divisor = divisorByMagicNumberSigned(*mn->getValue().getRawData(), 0);
 
@@ -1231,8 +1176,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv7(BasicBlock::iterator iter, bool
 			divisor = - divisorByMagicNumberSigned3(magic, shift);
 		else
 			divisor = divisorByMagicNumberSigned3(magic, shift);
-
-		eraseInstFromBasicBlock(op_lshr3, val.getParent());
 	}
 	else if (version == 3)
 	{
@@ -1243,24 +1186,9 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv7(BasicBlock::iterator iter, bool
 			divisor = - divisorByMagicNumberSigned4(magic, shift);
 		else
 			divisor = divisorByMagicNumberSigned4(magic, shift);
-
-		eraseInstFromBasicBlock(op_add, val.getParent());
 	}
 	else
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_or1, val.getParent());
-	eraseInstFromBasicBlock(op_or2, val.getParent());
-	eraseInstFromBasicBlock(op_and1, val.getParent());
-	eraseInstFromBasicBlock(op_and2, val.getParent());
-	eraseInstFromBasicBlock(op_lshr1, val.getParent());
-	eraseInstFromBasicBlock(op_lshr2, val.getParent());
-	eraseInstFromBasicBlock(op_ashr1, val.getParent());
-	eraseInstFromBasicBlock(op_trun_or_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_trun_or_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
 
 	Constant *NewCst = ConstantInt::get(op_var->getType(), divisor);
 	BinaryOperator *div = BinaryOperator::CreateSDiv(op_var, NewCst);
@@ -1409,15 +1337,6 @@ Instruction * IdiomsMagicDivMod::magicSignedDiv8(BasicBlock::iterator iter, bool
 	else
 		divisor = divisorByMagicNumberSigned3(magic, 32);
 
-	eraseInstFromBasicBlock(op_or, val.getParent());
-	eraseInstFromBasicBlock(op_and, val.getParent());
-	eraseInstFromBasicBlock(op_lshr1, val.getParent());
-	eraseInstFromBasicBlock(op_lshr2, val.getParent());
-	eraseInstFromBasicBlock(op_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_sext, val.getParent());
-	eraseInstFromBasicBlock(op_trunc, val.getParent());
-
 	Constant *NewCst = ConstantInt::get(op_var->getType(), divisor);
 	BinaryOperator *div = BinaryOperator::CreateSDiv(op_var, NewCst);
 
@@ -1565,14 +1484,6 @@ Instruction * IdiomsMagicDivMod::signedMod1(BasicBlock::iterator iter) const {
 	Constant *NewCst = ConstantInt::get(op_var->getType(), *k->getValue().getRawData());
 	BinaryOperator *mod = BinaryOperator::CreateSRem(op_var, NewCst);
 
-	// Do not erase the topmost nodes op_trunc_or_else1 and op_trunc_or_else2
-	// they might be used for loading op_val value
-	eraseInstFromBasicBlock(op_mul1, val.getParent());
-	eraseInstFromBasicBlock(op_trunc_or_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_lshr, val.getParent());
-	eraseInstFromBasicBlock(op_mul2, val.getParent());
-	eraseInstFromBasicBlock(op_zext2, val.getParent());
-
 	// value and modulo may have different types -> a conversion is needed
 	// conversion can be from to smaller or even bigger
 	if (val.getType() != mod->getType() && CastInst::castIsValid(Instruction::ZExt, mod, val.getType())) {
@@ -1628,7 +1539,6 @@ Instruction * IdiomsMagicDivMod::signedMod2(BasicBlock::iterator iter) const {
 	 */
 
 	Instruction & val = (*iter);
-	Value * op_add      = nullptr;
 	Value * op_and1     = nullptr;
 	Value * op_and2     = nullptr;
 	Value * op_ashr     = nullptr;
@@ -1689,17 +1599,6 @@ Instruction * IdiomsMagicDivMod::signedMod2(BasicBlock::iterator iter) const {
 	Constant *NewCst = ConstantInt::get(op_var->getType(), *k->getValue().getRawData());
 	BinaryOperator *mod = BinaryOperator::CreateSRem(op_var, NewCst);
 
-	eraseInstFromBasicBlock(op_add, val.getParent());
-	eraseInstFromBasicBlock(op_and1, val.getParent());
-	eraseInstFromBasicBlock(op_and2, val.getParent());
-	eraseInstFromBasicBlock(op_ashr, val.getParent());
-	eraseInstFromBasicBlock(op_lshr1, val.getParent());
-	eraseInstFromBasicBlock(op_lshr2, val.getParent());
-	eraseInstFromBasicBlock(op_mul, val.getParent());
-	eraseInstFromBasicBlock(op_or1, val.getParent());
-	eraseInstFromBasicBlock(op_or2, val.getParent());
-	eraseInstFromBasicBlock(op_sub, val.getParent());
-
 	return mod;
 }
 
@@ -1726,8 +1625,6 @@ Instruction * IdiomsMagicDivMod::unsignedMod(BasicBlock::iterator iter) const {
 
 	if (op_var2 != op_var1)
 		return nullptr;
-
-	eraseInstFromBasicBlock(op_div, val.getParent());
 
 	BinaryOperator *urem = BinaryOperator::CreateURem(op_var1, cnst);
 
