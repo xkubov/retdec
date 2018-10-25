@@ -32,7 +32,7 @@
 #include "retdec/utils/container.h"
 #include "retdec/utils/string.h"
 #include "retdec/bin2llvmir/optimizations/param_return/param_return.h"
-#define debug_enabled false
+#define debug_enabled true
 #include "retdec/bin2llvmir/utils/llvm.h"
 #include "retdec/bin2llvmir/providers/asm_instruction.h"
 #include "retdec/bin2llvmir/utils/ir_modifier.h"
@@ -124,6 +124,7 @@ bool ParamReturn::runOnModule(Module& m)
 	_image = FileImageProvider::getFileImage(_module);
 	_dbgf = DebugFormatProvider::getDebugFormat(_module);
 	_lti = LtiProvider::getLti(_module);
+
 	return run();
 }
 
@@ -276,16 +277,22 @@ CallEntry::CallEntry(llvm::CallInst* c) :
 
 }
 
-void DataFlowEntry::filterNegativeStacks()
+std::vector<Type*> CallEntry::extractSpecificArgTypes(Module* m,
+						ReachingDefinitionsAnalysis& _RDA) const
 {
-	args.erase(
-		std::remove_if(args.begin(), args.end(),
-			[this](const Value* li)
-			{
-				auto aOff = _config->getStackVariableOffset(li);
-				return aOff.isDefined() && aOff < 0;
-			}),
-		args.end());
+	std::string formatStr = extractFormatString(_RDA);
+
+	if (formatStr.empty())
+	{
+		return {};
+	}
+
+	std::vector<llvm::Type*> types = llvm_utils::parseFormatString(
+			m,
+			formatStr,
+			call->getCalledFunction());
+
+	return types;
 }
 
 /**
@@ -332,8 +339,10 @@ void DataFlowEntry::sortValues(std::vector<Value*> &args) const
 	});
 }
 
-void CallEntry::extractFormatString(ReachingDefinitionsAnalysis& _RDA)
+std::string CallEntry::extractFormatString(ReachingDefinitionsAnalysis& _RDA) const
 {
+	std::string str;
+
 	for (auto i : possibleArgs)
 	{
 		auto inst = std::find_if(possibleArgStores.begin(),
@@ -345,14 +354,14 @@ void CallEntry::extractFormatString(ReachingDefinitionsAnalysis& _RDA)
 
 		if (inst != possibleArgStores.end())
 		{
-			std::string str;
 			if (instructionStoresString(*inst, str, _RDA))
 			{
-				formatStr = str;
-				return;
+				break;
 			}
 		}
 	}
+
+	return str;
 }
 
 //
@@ -465,10 +474,11 @@ void DataFlowEntry::dump() const
 		{
 			LOG << "\t\t\t>|" << llvmObjToString(l) << std::endl;
 		}
+		/*
 		if (!e.formatStr.empty())
 		{
 			LOG << "\t\t\t>|format str: " << e.formatStr << std::endl;
-		}
+		}*/
 	}
 
 	LOG << "\t>|arg loads:" << std::endl;
@@ -864,8 +874,12 @@ void DataFlowEntry::filterKnownParamPairs()
 
 void DataFlowEntry::filter()
 {
-	filterNegativeStacks();
-	sortValues(args);
+	if (!args.empty())
+	{
+		ParamFilter argFilter(args, *_abi, *_config);
+		argFilter.leaveOnlyPositiveStacks();
+		args = argFilter.getParamValuesSortedByTypes(argTypes);
+	}
 
 	for (CallEntry& e : calls)
 	{
@@ -874,12 +888,18 @@ void DataFlowEntry::filter()
 		filter.leaveOnlyContinuousStackOffsets();
 		filter.leaveOnlyContinuousSequence();
 
-		e.possibleArgs = filter.getParamValues();
+		auto types = argTypes;
 
 		if (isVarArg)
 		{
-			e.extractFormatString(_RDA);
+			auto specTypes = e.extractSpecificArgTypes(_module, _RDA);
+			types.insert(types.end(),
+					specTypes.begin(),
+					specTypes.end());
 		}
+
+		e.possibleArgs = types.empty() ? filter.getParamValues()
+					: filter.getParamValuesSortedByTypes(types);
 	}
 
 	if (!isVarArg)
@@ -1030,18 +1050,6 @@ void DataFlowEntry::callsFilterSameNumberOfStacks()
 	}
 }
 
-void DataFlowEntry::applyToIr()
-{
-	if (isVarArg)
-	{
-		applyToIrVariadic();
-	}
-	else
-	{
-		applyToIrOrdinary();
-	}
-}
-
 std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() const
 {
 	std::map<CallInst*, std::vector<Value*>> loadsOfCalls;
@@ -1052,6 +1060,9 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 		auto* call = e.call;
 		for (auto* s : e.possibleArgs)
 		{
+			if (s == nullptr)
+				continue;
+
 			auto fIt = specialArgStorage.find(loads.size());
 			while (fIt != specialArgStorage.end())
 			{
@@ -1078,7 +1089,7 @@ void DataFlowEntry::replaceCalls()
 		IrModifier::modifyCallInst(l.first, l.first->getType(), l.second);
 }
 
-void DataFlowEntry::applyToIrOrdinary()
+void DataFlowEntry::applyToIr()
 {
 	Function* analysedFunction = getFunction();
 
@@ -1125,208 +1136,10 @@ void DataFlowEntry::applyToIrOrdinary()
 
 	auto paramRegs = _abi->parameterRegisters();
 
-	for (auto& p : loadsOfCalls)
-	{
-		std::size_t idx = 0;
-		for (auto* t : argTypes)
-		{
-			(void) t;
-			if (p.second.size() <= idx)
-			{
-				if (idx < paramRegs.size())
-				{
-					auto* r = _abi->getRegister(paramRegs[idx]);
-					auto* l = new LoadInst(r, "", p.first);
-					p.second.push_back(l);
-				}
-			}
-			++idx;
-		}
-	}
-
 	auto* oldType = analysedFunction->getType();
 	IrModifier irm(_module, _config);
 	auto* newFnc = irm.modifyFunction(
 			analysedFunction,
-			retType,
-			argTypes,
-			isVarArg,
-			rets2vals,
-			loadsOfCalls,
-			retVal,
-			argStores,
-			argNames).first;
-
-	LOG << "modify fnc: " << newFnc->getName().str() << " = "
-			<< llvmObjToString(oldType) << " -> "
-			<< llvmObjToString(newFnc->getType()) << std::endl;
-
-	called = newFnc;
-}
-
-void DataFlowEntry::applyToIrVariadic()
-{
-	auto paramRegs = _abi->parameterRegisters();
-	auto paramFPRegs = _abi->parameterFPRegisters();
-	auto doubleParamRegs = _abi->doubleParameterRegisters();
-
-	llvm::Value* retVal = nullptr;
-	std::map<ReturnInst*, Value*> rets2vals;
-	std::vector<llvm::Value*> argStores;
-	std::map<llvm::CallInst*, std::vector<llvm::Value*>> loadsOfCalls;
-
-	for (CallEntry& ce : calls)
-	{
-		auto* fnc = ce.call->getFunction();
-		auto* calledFnc = ce.call->getCalledFunction();
-
-		LOG << llvmObjToString(ce.call) << std::endl;
-		LOG << "\tformat : " << ce.formatStr << std::endl;
-
-		// get lowest stack offset
-		//
-		int stackOff = std::numeric_limits<int>::max();
-		for (Value* s : ce.possibleArgs)
-		{
-			if (_config->isStackVariable(s))
-			{
-				auto so = _config->getStackVariableOffset(s);
-				if (so < stackOff)
-				{
-					stackOff = so;
-				}
-			}
-		}
-		LOG << "\tlowest : " << std::dec << stackOff << std::endl;
-
-		//
-		//
-		auto* wrapCall = isSimpleWrapper(calledFnc);
-		auto* wrapFnc = wrapCall ? wrapCall->getCalledFunction() : calledFnc;
-		std::vector<llvm::Type*> ttypes = llvm_utils::parseFormatString(
-				_module,
-				ce.formatStr,
-				wrapFnc);
-
-		if (_config->getConfig().architecture.isPic32())
-		{
-			for (size_t i = 0; i < ttypes.size(); ++i)
-			{
-				if (ttypes[i]->isDoubleTy())
-				{
-					ttypes[i] = Type::getFloatTy(_module->getContext());
-				}
-			}
-		}
-
-		//
-		//
-		int off = stackOff;
-		std::vector<Value*> args;
-
-		size_t faIdx = 0;
-		size_t aIdx = 0;
-
-		std::vector<llvm::Type*> types = argTypes;
-		types.insert(types.end(), ttypes.begin(), ttypes.end());
-
-		for (Type* t : types)
-		{
-			LOG << "\ttype : " << llvmObjToString(t) << std::endl;
-			uint32_t sz = _abi->getTypeByteSize(t);
-			uint32_t ws = _abi->getTypeByteSize(_abi->getDefaultPointerType());
-			sz = sz > ws ? ws*2:ws;
-
-			if (t->isFloatTy() && _abi->usesFPRegistersForParameters() && faIdx < paramFPRegs.size())
-			{
-
-				auto* r = _abi->getRegister(paramFPRegs[faIdx]);
-				if (r)
-				{
-					args.push_back(r);
-				}
-				++faIdx;
-			}
-			else if (t->isDoubleTy() && _abi->usesFPRegistersForParameters() && faIdx < doubleParamRegs.size())
-			{
-				auto* r = _abi->getRegister(doubleParamRegs[faIdx]);
-				if (r)
-				{
-					args.push_back(r);
-				}
-				++faIdx;
-				++faIdx;
-			}
-			else if (aIdx < paramRegs.size())
-			{
-				auto* r = _abi->getRegister(paramRegs[aIdx]);
-				if (r)
-				{
-					args.push_back(r);
-				}
-
-				// TODO: register pairs -> if size is more than arch size
-				if (sz > ws)
-				{
-					++aIdx;
-				}
-
-				++aIdx;
-			}
-			else
-			{
-				auto* st = _config->getLlvmStackVariable(fnc, off);
-				if (st)
-				{
-					args.push_back(st);
-				}
-
-				off += sz;
-			}
-		}
-
-		//
-		//
-		unsigned idx = 0;
-		std::vector<Value*> loads;
-		for (auto* a : args)
-		{
-			Value* l = new LoadInst(a, "", ce.call);
-			LOG << "\t\t" << llvmObjToString(l) << std::endl;
-
-			if (types.size() > idx)
-			{
-				l = IrModifier::convertValueToType(l, types[idx], ce.call);
-			}
-
-			loads.push_back(l);
-			++idx;
-		}
-
-		if (!loads.empty())
-		{
-			loadsOfCalls[ce.call] = loads;
-		}
-	}
-
-	retVal = retType->isFloatingPointTy() ?
-		_abi->getFPReturnRegister() : _abi->getReturnRegister();
-
-	if (retVal)
-	{
-		for (auto& e : retStores)
-		{
-			auto* l = new LoadInst(retVal, "", e.ret);
-			rets2vals[e.ret] = l;
-		}
-	}
-
-	auto* fnc = getFunction();
-	auto* oldType = fnc->getType();
-
-	IrModifier irm(_module, _config);
-	auto* newFnc = irm.modifyFunction(
-			fnc,
 			retType,
 			argTypes,
 			isVarArg,
@@ -1954,6 +1767,91 @@ std::vector<Value*> ParamFilter::getParamValues() const
 
 	return paramValues;
 }
+
+std::vector<Value*> ParamFilter::getParamValuesSortedByTypes(std::vector<llvm::Type*> &types) const
+{
+	std::vector<Value*> paramValues;
+	auto ri = _regValues.begin();
+	auto fi = _fpRegValues.begin();
+	auto si = _stackValues.begin();
+
+	for (auto t: types)
+	{
+		if (t->isFloatingPointTy())
+		{
+			if (fi != _fpRegValues.end())
+			{
+				auto reg = _abi.getRegister(*fi);
+				paramValues.push_back(reg);
+				++fi;
+			}
+			else if (!_abi.usesFPRegistersForParameters()
+					&& ri != _regValues.end())
+			{
+				auto reg = _abi.getRegister(*ri);
+				paramValues.push_back(reg);
+				++ri;
+			}
+			else if (si != _stackValues.end())
+			{
+				paramValues.push_back(*si);
+				++si;
+			}
+			else
+			{
+				paramValues.push_back(nullptr);
+			}
+		}
+		else
+		{
+			if (ri != _regValues.end())
+			{
+				auto reg = _abi.getRegister(*ri);
+				paramValues.push_back(reg);
+				++ri;
+			}
+			else if (si != _stackValues.end())
+			{
+				paramValues.push_back(*si);
+				++si;
+			}
+			else
+			{
+				paramValues.push_back(nullptr);
+			}
+		}
+	}
+
+	while (ri != _regValues.end())
+	{
+		paramValues.push_back(_abi.getRegister(*ri));
+		ri++;
+	}
+
+	while (fi != _fpRegValues.end())
+	{
+		paramValues.push_back(_abi.getRegister(*fi));
+		fi++;
+	}
+
+	paramValues.insert(paramValues.end(), si, _stackValues.end());
+
+	return paramValues;
+}
+
+void ParamFilter::leaveOnlyPositiveStacks()
+{
+	_stackValues.erase(
+		std::remove_if(_stackValues.begin(), _stackValues.end(),
+			[this](const Value* li)
+			{
+				auto aOff = _config.getStackVariableOffset(li);
+				return aOff.isDefined() && aOff < 0;
+			}),
+		_stackValues.end());
+}
+
+
 
 } // namespace bin2llvmir
 } // namespace retdec

@@ -32,18 +32,23 @@ class CallEntry
 		CallEntry(llvm::CallInst* c);
 
 	public:
-		void extractFormatString(ReachingDefinitionsAnalysis& _RDA);
 		bool instructionStoresString(
-				llvm::StoreInst *si,
+				llvm::StoreInst* si,
 				std::string& str,
-				ReachingDefinitionsAnalysis &_RDA) const;
+				ReachingDefinitionsAnalysis& _RDA) const;
+
+		std::vector<llvm::Type*> extractSpecificArgTypes(
+				llvm::Module* m,
+				ReachingDefinitionsAnalysis& _RDA) const;
+
+	private:
+		std::string extractFormatString(ReachingDefinitionsAnalysis& _RDA) const;
 
 	public:
 		llvm::CallInst* call = nullptr;
 		std::vector<llvm::Value*> possibleArgs;
 		std::vector<llvm::StoreInst*> possibleArgStores;
 		std::vector<llvm::LoadInst*> possibleRetLoads;
-		std::string formatStr;
 };
 
 class ReturnEntry
@@ -72,7 +77,11 @@ class ParamFilter
 		void leaveOnlyContinuousSequence();
 		void leaveOnlyContinuousStackOffsets();
 
+		void leaveOnlyPositiveStacks();
+
 		std::vector<llvm::Value*> getParamValues() const;
+		std::vector<llvm::Value*> getParamValuesSortedByTypes(
+						std::vector<llvm::Type*> &types) const;
 
 	private:
 		void separateParamValues(const std::vector<llvm::Value*>& paramValues);
@@ -112,8 +121,7 @@ class DataFlowEntry
 		void filter();
 
 		void applyToIr();
-		void applyToIrOrdinary();
-		void applyToIrVariadic();
+		llvm::CallInst* isSimpleWrapper(llvm::Function* fnc);
 		void connectWrappers();
 
 	private:
@@ -144,8 +152,6 @@ class DataFlowEntry
 		void replaceCalls();
 		std::map<llvm::CallInst*, std::vector<llvm::Value*>>
 					fetchLoadsOfCalls() const;
-
-		llvm::CallInst* isSimpleWrapper(llvm::Function* fnc);
 
 	public:
 		llvm::Module* _module = nullptr;
