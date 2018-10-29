@@ -1061,11 +1061,20 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 	{
 		std::vector<Value*> loads;
 		auto* call = e.call;
+		auto paramRegs = _abi->parameterRegisters();
+
+		size_t idx2 = 0;
 		size_t idx = 0;
 		for (auto* s : e.possibleArgs)
 		{
 			if (s == nullptr)
-				continue;
+			{
+				if (idx2 < paramRegs.size())
+				{
+					s = _abi->getRegister(paramRegs[idx2]);
+				}
+				else continue;
+			}
 
 			auto fIt = specialArgStorage.find(loads.size());
 			while (fIt != specialArgStorage.end())
@@ -1080,6 +1089,9 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 				l = IrModifier::convertValueToType(l, e.specTypes[idx], e.call);
 				idx++;
 			}
+			if (_abi->isRegister(s))
+				idx2++;
+
 			loads.push_back(l);
 		}
 
@@ -1129,11 +1141,19 @@ void DataFlowEntry::applyToIr()
 		}
 	}
 
+	auto paramRegs = _abi->parameterRegisters();
+	size_t idx = 0; 
+
 	std::vector<llvm::Value*> argStores;
 	for (Value* l : args)
 	{
 		if (l == nullptr)
-			continue;
+		{
+			if (idx < paramRegs.size())
+			{
+				l = _abi->getRegister(paramRegs[idx]);
+			} else continue;
+		}
 
 		auto fIt = specialArgStorage.find(argStores.size());
 		while (fIt != specialArgStorage.end())
@@ -1142,10 +1162,11 @@ void DataFlowEntry::applyToIr()
 			fIt = specialArgStorage.find(argStores.size());
 		}
 
+		if (_abi->isRegister(l))
+			idx++;
+
 		argStores.push_back(l);
 	}
-
-	auto paramRegs = _abi->parameterRegisters();
 
 	auto* oldType = analysedFunction->getType();
 	IrModifier irm(_module, _config);
