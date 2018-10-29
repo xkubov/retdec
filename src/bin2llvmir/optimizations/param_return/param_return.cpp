@@ -897,6 +897,8 @@ void DataFlowEntry::filter()
 			types.insert(types.end(),
 					specTypes.begin(),
 					specTypes.end());
+
+			e.specTypes = types;
 		}
 
 		e.possibleArgs = types.empty() ? filter.getParamValues()
@@ -1059,6 +1061,7 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 	{
 		std::vector<Value*> loads;
 		auto* call = e.call;
+		size_t idx = 0;
 		for (auto* s : e.possibleArgs)
 		{
 			if (s == nullptr)
@@ -1072,7 +1075,11 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 				fIt = specialArgStorage.find(loads.size());
 			}
 
-			auto* l = new LoadInst(s, "", call);
+			Value* l = new LoadInst(s, "", call);
+			if (isVarArg) {
+				l = IrModifier::convertValueToType(l, e.specTypes[idx], e.call);
+				idx++;
+			}
 			loads.push_back(l);
 		}
 

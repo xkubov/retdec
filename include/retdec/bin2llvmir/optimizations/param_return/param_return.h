@@ -49,6 +49,9 @@ class CallEntry
 		std::vector<llvm::Value*> possibleArgs;
 		std::vector<llvm::StoreInst*> possibleArgStores;
 		std::vector<llvm::LoadInst*> possibleRetLoads;
+	
+	public:
+		std::vector<llvm::Type*> specTypes;
 };
 
 class ReturnEntry
