@@ -876,9 +876,10 @@ void DataFlowEntry::filter()
 {
 	if (!args.empty())
 	{
-		ParamFilter argFilter(args, *_abi, *_config);
-		argFilter.leaveOnlyPositiveStacks();
-		args = argFilter.getParamValuesSortedByTypes(argTypes);
+		ParamFilter filter(args, *_abi, *_config);
+		filter.leaveOnlyPositiveStacks();
+		args = argTypes.empty() ? filter.getParamValues()
+					: filter.getParamValuesSortedByTypes(argTypes);
 	}
 
 	for (CallEntry& e : calls)
