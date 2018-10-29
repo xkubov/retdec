@@ -1124,6 +1124,9 @@ void DataFlowEntry::applyToIr()
 	std::vector<llvm::Value*> argStores;
 	for (Value* l : args)
 	{
+		if (l == nullptr)
+			continue;
+
 		auto fIt = specialArgStorage.find(argStores.size());
 		while (fIt != specialArgStorage.end())
 		{
