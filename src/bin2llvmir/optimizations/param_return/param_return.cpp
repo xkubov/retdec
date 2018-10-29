@@ -1825,20 +1825,6 @@ std::vector<Value*> ParamFilter::getParamValuesSortedByTypes(std::vector<llvm::T
 		}
 	}
 
-	while (ri != _regValues.end())
-	{
-		paramValues.push_back(_abi.getRegister(*ri));
-		ri++;
-	}
-
-	while (fi != _fpRegValues.end())
-	{
-		paramValues.push_back(_abi.getRegister(*fi));
-		fi++;
-	}
-
-	paramValues.insert(paramValues.end(), si, _stackValues.end());
-
 	return paramValues;
 }
 
