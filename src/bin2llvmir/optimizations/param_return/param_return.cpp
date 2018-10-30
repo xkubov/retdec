@@ -474,11 +474,6 @@ void DataFlowEntry::dump() const
 		{
 			LOG << "\t\t\t>|" << llvmObjToString(l) << std::endl;
 		}
-		/*
-		if (!e.formatStr.empty())
-		{
-			LOG << "\t\t\t>|format str: " << e.formatStr << std::endl;
-		}*/
 	}
 
 	LOG << "\t>|arg loads:" << std::endl;
@@ -876,15 +871,15 @@ void DataFlowEntry::filter()
 {
 	if (!args.empty())
 	{
-		ParamFilter filter(args, *_abi, *_config);
+		ParamFilter filter(args, _abi, _config);
 		filter.leaveOnlyPositiveStacks();
 		args = argTypes.empty() ? filter.getParamValues()
-					: filter.getParamValuesSortedByTypes(argTypes);
+					: filter.getParamValues(argTypes);
 	}
 
 	for (CallEntry& e : calls)
 	{
-		ParamFilter filter(e.possibleArgs, *_abi, *_config);
+		ParamFilter filter(e.possibleArgs, _abi, _config);
 
 		filter.leaveOnlyContinuousStackOffsets();
 		filter.leaveOnlyContinuousSequence();
@@ -901,8 +896,13 @@ void DataFlowEntry::filter()
 			e.specTypes = types;
 		}
 
+		if (!types.empty())
+		{
+			filter.adjustValuesByKnownTypes(e.call, types);
+		}
+
 		e.possibleArgs = types.empty() ? filter.getParamValues()
-					: filter.getParamValuesSortedByTypes(types);
+					: filter.getParamValues(types);
 	}
 
 	if (!isVarArg)
@@ -1063,18 +1063,11 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 		auto* call = e.call;
 		auto paramRegs = _abi->parameterRegisters();
 
-		size_t idx2 = 0;
-		size_t idx = 0;
+		auto type = argTypes.begin();
 		for (auto* s : e.possibleArgs)
 		{
 			if (s == nullptr)
-			{
-				if (idx2 < paramRegs.size())
-				{
-					s = _abi->getRegister(paramRegs[idx2]);
-				}
-				else continue;
-			}
+				continue;
 
 			auto fIt = specialArgStorage.find(loads.size());
 			while (fIt != specialArgStorage.end())
@@ -1085,12 +1078,17 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 			}
 
 			Value* l = new LoadInst(s, "", call);
-			if (isVarArg) {
-				l = IrModifier::convertValueToType(l, e.specTypes[idx], e.call);
-				idx++;
+
+			if (type != argTypes.end())
+			{
+				l = IrModifier::convertValueToType(l, *type, call);
+				type++;
+				
 			}
-			if (_abi->isRegister(s))
-				idx2++;
+			else
+			{
+				l = IrModifier::convertValueToType(l, _abi->getDefaultType(), call);
+			}
 
 			loads.push_back(l);
 		}
@@ -1142,18 +1140,12 @@ void DataFlowEntry::applyToIr()
 	}
 
 	auto paramRegs = _abi->parameterRegisters();
-	size_t idx = 0; 
 
 	std::vector<llvm::Value*> argStores;
 	for (Value* l : args)
 	{
 		if (l == nullptr)
-		{
-			if (idx < paramRegs.size())
-			{
-				l = _abi->getRegister(paramRegs[idx]);
-			} else continue;
-		}
+			continue;
 
 		auto fIt = specialArgStorage.find(argStores.size());
 		while (fIt != specialArgStorage.end())
@@ -1161,9 +1153,6 @@ void DataFlowEntry::applyToIr()
 			argStores.push_back(fIt->second);
 			fIt = specialArgStorage.find(argStores.size());
 		}
-
-		if (_abi->isRegister(l))
-			idx++;
 
 		argStores.push_back(l);
 	}
@@ -1597,37 +1586,37 @@ void DataFlowEntry::setArgumentTypes()
 
 ParamFilter::ParamFilter(
 		const std::vector<Value*>& paramValues,
-		const Abi& abi,
-		Config& config)
+		const Abi* abi,
+		Config* config)
 		:
 		_abi(abi),
 		_config(config)
 {
 	separateParamValues(paramValues);
 
-	orderRegistersBy(_fpRegValues, _abi.parameterFPRegisters());
-	orderRegistersBy(_regValues, _abi.parameterRegisters());
+	orderRegistersBy(_fpRegValues, _abi->parameterFPRegisters());
+	orderRegistersBy(_regValues, _abi->parameterRegisters());
 	orderStacks(_stackValues);
 }
 
 void ParamFilter::separateParamValues(const std::vector<Value*>& paramValues)
 {
-	auto regs = _abi.parameterRegisters();
+	auto regs = _abi->parameterRegisters();
 
 	for (auto pv: paramValues)
 	{
-		if (_config.isStackVariable(pv))
+		if (_config->isStackVariable(pv))
 		{
 			_stackValues.push_back(pv);
 		}
 		else if (std::find(regs.begin(), regs.end(),
-				_abi.getRegisterId(pv)) != regs.end())
+				_abi->getRegisterId(pv)) != regs.end())
 		{
-			_regValues.push_back(_abi.getRegisterId(pv));
+			_regValues.push_back(_abi->getRegisterId(pv));
 		}
 		else
 		{
-			_fpRegValues.push_back(_abi.getRegisterId(pv));
+			_fpRegValues.push_back(_abi->getRegisterId(pv));
 		}
 	}
 }
@@ -1639,8 +1628,8 @@ void ParamFilter::orderStacks(std::vector<Value*>& stacks, bool asc) const
 			stacks.end(),
 			[this, asc](Value* a, Value* b) -> bool
 	{
-		auto aOff = _config.getStackVariableOffset(a);
-		auto bOff = _config.getStackVariableOffset(b);
+		auto aOff = _config->getStackVariableOffset(a);
+		auto bOff = _config->getStackVariableOffset(b);
 
 		bool ascOrd = aOff < bOff;
 
@@ -1667,12 +1656,12 @@ void ParamFilter::orderRegistersBy(
 void ParamFilter::leaveOnlyContinuousStackOffsets()
 {
 	retdec::utils::Maybe<int> prevOff;
-	int gap = _abi.getTypeByteSize(_abi.getDefaultPointerType()) * 2;
+	int gap = _abi->getTypeByteSize(_abi->getDefaultPointerType()) * 2;
 
 	auto it = _stackValues.begin();
 	while (it != _stackValues.end())
 	{
-		auto off = _config.getStackVariableOffset(*it);
+		auto off = _config->getStackVariableOffset(*it);
 
 		if (prevOff.isUndefined())
 		{
@@ -1694,7 +1683,7 @@ void ParamFilter::leaveOnlyContinuousStackOffsets()
 
 void ParamFilter::leaveOnlyContinuousSequence()
 {
-	if (_abi.parameterRegistersOverlay())
+	if (_abi->parameterRegistersOverlay())
 	{
 		applyAlternatingRegistersFilter();
 	}
@@ -1706,8 +1695,8 @@ void ParamFilter::leaveOnlyContinuousSequence()
 
 void ParamFilter::applyAlternatingRegistersFilter()
 {
-	auto templRegs = _abi.parameterRegisters();
-	auto fpTemplRegs = _abi.parameterFPRegisters();
+	auto templRegs = _abi->parameterRegisters();
+	auto fpTemplRegs = _abi->parameterFPRegisters();
 
 	size_t idx = 0;
 	auto it = _regValues.begin();
@@ -1745,7 +1734,7 @@ void ParamFilter::applyAlternatingRegistersFilter()
 void ParamFilter::applySequentialRegistersFilter()
 {
 	auto it = _regValues.begin();
-	for (auto regId : _abi.parameterRegisters())
+	for (auto regId : _abi->parameterRegisters())
 	{
 		if (it == _regValues.end())
 		{
@@ -1764,7 +1753,7 @@ void ParamFilter::applySequentialRegistersFilter()
 	}
 
 	auto fIt = _fpRegValues.begin();
-	for (auto regId : _abi.parameterFPRegisters())
+	for (auto regId : _abi->parameterFPRegisters())
 	{
 		if (fIt == _fpRegValues.end())
 		{
@@ -1787,12 +1776,12 @@ std::vector<Value*> ParamFilter::getParamValues() const
 
 	for (auto i : _regValues)
 	{
-		paramValues.push_back(_abi.getRegister(i));
+		paramValues.push_back(_abi->getRegister(i));
 	}
 
 	for (auto i : _fpRegValues)
 	{
-		paramValues.push_back(_abi.getRegister(i));
+		paramValues.push_back(_abi->getRegister(i));
 	}
 
 	paramValues.insert(paramValues.end(), _stackValues.begin(), _stackValues.end());
@@ -1800,7 +1789,8 @@ std::vector<Value*> ParamFilter::getParamValues() const
 	return paramValues;
 }
 
-std::vector<Value*> ParamFilter::getParamValuesSortedByTypes(std::vector<llvm::Type*> &types) const
+std::vector<Value*> ParamFilter::getParamValues(
+				std::vector<Type*> &types) const
 {
 	std::vector<Value*> paramValues;
 	auto ri = _regValues.begin();
@@ -1813,14 +1803,14 @@ std::vector<Value*> ParamFilter::getParamValuesSortedByTypes(std::vector<llvm::T
 		{
 			if (fi != _fpRegValues.end())
 			{
-				auto reg = _abi.getRegister(*fi);
+				auto reg = _abi->getRegister(*fi);
 				paramValues.push_back(reg);
 				++fi;
 			}
-			else if (!_abi.usesFPRegistersForParameters()
+			else if (!_abi->usesFPRegistersForParameters()
 					&& ri != _regValues.end())
 			{
-				auto reg = _abi.getRegister(*ri);
+				auto reg = _abi->getRegister(*ri);
 				paramValues.push_back(reg);
 				++ri;
 			}
@@ -1838,7 +1828,7 @@ std::vector<Value*> ParamFilter::getParamValuesSortedByTypes(std::vector<llvm::T
 		{
 			if (ri != _regValues.end())
 			{
-				auto reg = _abi.getRegister(*ri);
+				auto reg = _abi->getRegister(*ri);
 				paramValues.push_back(reg);
 				++ri;
 			}
@@ -1857,19 +1847,105 @@ std::vector<Value*> ParamFilter::getParamValuesSortedByTypes(std::vector<llvm::T
 	return paramValues;
 }
 
+Value* ParamFilter::stackVariableForType(CallInst* call, Type* type) const
+{
+	uint32_t wordSize = _abi->getTypeByteSize(_abi->getDefaultPointerType());
+
+	uint32_t off = _abi->getTypeByteSize(type);
+	off = off > wordSize ? wordSize*2:wordSize;
+
+	if (!_stackValues.empty())
+	{
+		off += _config->getStackVariableOffset(_stackValues.back());
+	}
+
+	return _config->getLlvmStackVariable(call->getFunction(), off);
+}
+
+void ParamFilter::adjustValuesByKnownTypes(CallInst* call, std::vector<llvm::Type*>& types)
+{
+	auto paramRegs = _abi->parameterRegisters();
+	auto fpParamRegs = _abi->parameterFPRegisters();
+	
+	// Indexes of registers to be used next as particular parameter.
+	size_t pIdx = 0;
+	size_t fpIdx = 0;
+
+	auto si = _stackValues.begin();
+
+	std::vector<Value*> paramValues;
+	for (auto t: types)
+	{
+		if (_abi->usesFPRegistersForParameters()
+				&& t->isFloatingPointTy())
+		{
+			// If should use register for parameter
+			if (fpIdx < fpParamRegs.size())
+			{
+				if (fpIdx >= _fpRegValues.size())
+				{
+					_fpRegValues.push_back(fpParamRegs[fpIdx]);
+				}
+				// Used register for parameter, point to next one
+				++fpIdx;
+			} 
+			else if (si != _stackValues.end())
+			{
+				++si;
+			}
+			else // No stack var -> try to find appropriate one in module
+			{
+				auto s = stackVariableForType(call, t);
+				if (s != nullptr) {
+					_stackValues.push_back(s);
+					si = _stackValues.end();
+				}
+			}
+		}
+		else
+		{
+			// If should use register for parameter
+			if (pIdx < paramRegs.size())
+			{
+				if (pIdx >= _regValues.size())
+				{
+					_regValues.push_back(paramRegs[pIdx]);
+				}
+				// Used register for parameter, point to next one
+				++pIdx;
+			} 
+			else if (si != _stackValues.end())
+			{
+				++si;
+			}
+			else // No stack var -> try to find appropriate one in module
+			{
+				auto s = stackVariableForType(call, t);
+				if (s != nullptr) {
+					_stackValues.push_back(s);
+					si = _stackValues.end();
+				}
+			}
+		}
+	}
+
+	if (si != _stackValues.end())
+	{
+		_stackValues.erase(si, _stackValues.end());
+	}
+}
+
 void ParamFilter::leaveOnlyPositiveStacks()
 {
 	_stackValues.erase(
 		std::remove_if(_stackValues.begin(), _stackValues.end(),
 			[this](const Value* li)
 			{
-				auto aOff = _config.getStackVariableOffset(li);
+				auto aOff = _config->getStackVariableOffset(li);
 				return aOff.isDefined() && aOff < 0;
 			}),
 		_stackValues.end());
 }
-
-
 
 } // namespace bin2llvmir
 } // namespace retdec

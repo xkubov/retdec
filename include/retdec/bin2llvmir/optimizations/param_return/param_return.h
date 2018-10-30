@@ -49,8 +49,6 @@ class CallEntry
 		std::vector<llvm::Value*> possibleArgs;
 		std::vector<llvm::StoreInst*> possibleArgStores;
 		std::vector<llvm::LoadInst*> possibleRetLoads;
-	
-	public:
 		std::vector<llvm::Type*> specTypes;
 };
 
@@ -69,8 +67,8 @@ class ParamFilter
 	public:
 		ParamFilter(
 			const std::vector<llvm::Value*>& paramValues,
-			const Abi& abi,
-			Config& config);
+			const Abi* abi,
+			Config* config);
 
 		void orderStacks(std::vector<llvm::Value*>& stacks, bool asc = true) const;
 		void orderRegistersBy(
@@ -79,21 +77,25 @@ class ParamFilter
 
 		void leaveOnlyContinuousSequence();
 		void leaveOnlyContinuousStackOffsets();
-
 		void leaveOnlyPositiveStacks();
 
+		void adjustValuesByKnownTypes(
+				llvm::CallInst* call, 
+				std::vector<llvm::Type*> &types);
+
 		std::vector<llvm::Value*> getParamValues() const;
-		std::vector<llvm::Value*> getParamValuesSortedByTypes(
+		std::vector<llvm::Value*> getParamValues(
 						std::vector<llvm::Type*> &types) const;
 
 	private:
 		void separateParamValues(const std::vector<llvm::Value*>& paramValues);
 		void applyAlternatingRegistersFilter();
 		void applySequentialRegistersFilter();
+		llvm::Value* stackVariableForType(llvm::CallInst* call, llvm::Type* type) const;
 
 	private:
-		const Abi& _abi;
-		Config& _config;
+		const Abi* _abi;
+		Config* _config;
 
 		std::vector<uint32_t> _regValues;
 		std::vector<uint32_t> _fpRegValues;
