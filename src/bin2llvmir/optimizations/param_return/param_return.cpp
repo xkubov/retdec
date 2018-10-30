@@ -1068,7 +1068,8 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 		auto* call = e.call;
 		auto paramRegs = _abi->parameterRegisters();
 
-		auto type = argTypes.begin();
+		size_t tIdx = 0;
+
 		for (auto* s : e.possibleArgs)
 		{
 			if (s == nullptr)
@@ -1084,11 +1085,15 @@ std::map<CallInst*, std::vector<Value*>> DataFlowEntry::fetchLoadsOfCalls() cons
 
 			Value* l = new LoadInst(s, "", call);
 
-			if (type != argTypes.end())
+			if (tIdx < argTypes.size())
 			{
-				l = IrModifier::convertValueToType(l, *type, call);
-				type++;
-				
+				l = IrModifier::convertValueToType(l, argTypes[tIdx], call);
+				tIdx++;
+			}
+			else if (tIdx < e.specTypes.size())
+			{
+				l = IrModifier::convertValueToType(l, e.specTypes[tIdx], call);
+				tIdx++;
 			}
 			else
 			{
