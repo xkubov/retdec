@@ -474,6 +474,11 @@ void DataFlowEntry::dump() const
 		{
 			LOG << "\t\t\t>|" << llvmObjToString(l) << std::endl;
 		}
+		LOG << "\t\t\targ types:" << std::endl;
+		for (auto* t : e.specTypes)
+		{
+			LOG << "\t\t\t>|" << llvmObjToString(t) << std::endl;
+		}
 	}
 
 	LOG << "\t>|arg loads:" << std::endl;
