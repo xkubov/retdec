@@ -278,7 +278,8 @@ CallEntry::CallEntry(llvm::CallInst* c) :
 }
 
 std::vector<Type*> CallEntry::extractSpecificArgTypes(Module* m,
-						ReachingDefinitionsAnalysis& _RDA) const
+						ReachingDefinitionsAnalysis& _RDA,
+						CallInst *wrappedCall) const
 {
 	std::string formatStr = extractFormatString(_RDA);
 
@@ -287,10 +288,12 @@ std::vector<Type*> CallEntry::extractSpecificArgTypes(Module* m,
 		return {};
 	}
 
+	auto trueCall = wrappedCall ? wrappedCall : call;
+
 	std::vector<llvm::Type*> types = llvm_utils::parseFormatString(
 			m,
 			formatStr,
-			call->getCalledFunction());
+			trueCall->getCalledFunction());
 
 	return types;
 }
@@ -893,7 +896,7 @@ void DataFlowEntry::filter()
 
 		if (isVarArg)
 		{
-			auto specTypes = e.extractSpecificArgTypes(_module, _RDA);
+			auto specTypes = e.extractSpecificArgTypes(_module, _RDA, isSimpleWrapper(e.call->getCalledFunction()));
 			types.insert(types.end(),
 					specTypes.begin(),
 					specTypes.end());
@@ -1277,7 +1280,7 @@ void DataFlowEntry::connectWrappers()
 	}
 }
 
-llvm::CallInst* DataFlowEntry::isSimpleWrapper(llvm::Function* fnc)
+llvm::CallInst* DataFlowEntry::isSimpleWrapper(llvm::Function* fnc) const
 {
 	auto ai = AsmInstruction(fnc);
 	if (ai.isInvalid())

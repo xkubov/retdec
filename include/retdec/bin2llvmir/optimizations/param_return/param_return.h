@@ -39,7 +39,8 @@ class CallEntry
 
 		std::vector<llvm::Type*> extractSpecificArgTypes(
 				llvm::Module* m,
-				ReachingDefinitionsAnalysis& _RDA) const;
+				ReachingDefinitionsAnalysis& _RDA,
+				llvm::CallInst* wrappedCall = nullptr) const;
 
 	private:
 		std::string extractFormatString(ReachingDefinitionsAnalysis& _RDA) const;
@@ -126,7 +127,6 @@ class DataFlowEntry
 		void filter();
 
 		void applyToIr();
-		llvm::CallInst* isSimpleWrapper(llvm::Function* fnc);
 		void connectWrappers();
 
 	private:
@@ -147,6 +147,8 @@ class DataFlowEntry
 		void setTypeFromUseContext();
 		void setReturnType();
 		void setArgumentTypes();
+
+		llvm::CallInst* isSimpleWrapper(llvm::Function* fnc) const;
 
 		void filterSortArgLoads();
 		void filterNegativeStacks();
