@@ -37,10 +37,10 @@ class CallEntry
 				std::string& str,
 				ReachingDefinitionsAnalysis& _RDA) const;
 
-		std::vector<llvm::Type*> extractSpecificArgTypes(
+		void extractSpecificArgTypes(
 				llvm::Module* m,
 				ReachingDefinitionsAnalysis& _RDA,
-				llvm::CallInst* wrappedCall = nullptr) const;
+				llvm::CallInst* wrappedCall = nullptr);
 
 	private:
 		std::string extractFormatString(ReachingDefinitionsAnalysis& _RDA) const;
@@ -67,7 +67,9 @@ class ParamFilter
 {
 	public:
 		ParamFilter(
+			llvm::CallInst* call,
 			const std::vector<llvm::Value*>& paramValues,
+			const std::vector<llvm::Type*> &types,
 			const Abi* abi,
 			Config* config);
 
@@ -85,8 +87,6 @@ class ParamFilter
 				std::vector<llvm::Type*> &types);
 
 		std::vector<llvm::Value*> getParamValues() const;
-		std::vector<llvm::Value*> getParamValues(
-						std::vector<llvm::Type*> &types) const;
 
 	private:
 		void separateParamValues(const std::vector<llvm::Value*>& paramValues);
@@ -94,13 +94,22 @@ class ParamFilter
 		void applySequentialRegistersFilter();
 		llvm::Value* stackVariableForType(llvm::CallInst* call, llvm::Type* type) const;
 
+		bool moveRegsByTypeSizeAtIdx(std::vector<uint32_t> &destinastion,
+					const std::vector<uint32_t> &sourceTemplate,
+					llvm::Type* type,
+					uint32_t* idx);
+
 	private:
 		const Abi* _abi;
 		Config* _config;
 
+		llvm::CallInst* _call;
+
 		std::vector<uint32_t> _regValues;
 		std::vector<uint32_t> _fpRegValues;
 		std::vector<llvm::Value*> _stackValues;
+
+		std::vector<llvm::Type*> _paramTypes;
 };
 
 class DataFlowEntry
@@ -159,6 +168,12 @@ class DataFlowEntry
 		void replaceCalls();
 		std::map<llvm::CallInst*, std::vector<llvm::Value*>>
 					fetchLoadsOfCalls() const;
+
+		llvm::Value* joinParamPair(llvm::Value* low, llvm::Value* high,
+				llvm::Type *type, llvm::Instruction *before) const;
+		void splitIntoParamPair(
+				llvm::AllocaInst* blob,
+				std::pair<llvm::Value*, llvm::Value*> &paramPair) const;
 
 	public:
 		llvm::Module* _module = nullptr;
