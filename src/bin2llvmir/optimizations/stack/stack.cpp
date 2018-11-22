@@ -17,7 +17,7 @@
 #include "retdec/bin2llvmir/optimizations/stack/stack.h"
 #include "retdec/bin2llvmir/providers/asm_instruction.h"
 #include "retdec/bin2llvmir/utils/ir_modifier.h"
-#define debug_enabled false
+#define debug_enabled true
 #include "retdec/bin2llvmir/utils/llvm.h"
 
 using namespace llvm;
@@ -46,6 +46,7 @@ bool StackAnalysis::runOnModule(llvm::Module& m)
 	_config = ConfigProvider::getConfig(_module);
 	_abi = AbiProvider::getAbi(_module);
 	_dbgf = DebugFormatProvider::getDebugFormat(_module);
+
 	return run();
 }
 
@@ -72,8 +73,13 @@ bool StackAnalysis::run()
 	ReachingDefinitionsAnalysis RDA;
 	RDA.runOnModule(*_module, _abi);
 
+	std::map<llvm::Function*, std::vector<llvm::AllocaInst*>> stackVarsMap;
+	std::map<llvm::AllocaInst*, std::vector<llvm::Instruction*>> usesOfStack;
+
 	for (auto& f : *_module)
 	{
+		std::set<llvm::AllocaInst*> stackVars;
+
 		std::map<Value*, Value*> val2val;
 		for (inst_iterator I = inst_begin(f), E = inst_end(f); I != E;)
 		{
@@ -92,7 +98,9 @@ bool StackAnalysis::run()
 						store,
 						store->getValueOperand(),
 						store->getValueOperand()->getType(),
-						val2val);
+						val2val,
+						stackVars,
+						usesOfStack);
 
 				if (isa<GlobalVariable>(store->getPointerOperand()))
 				{
@@ -104,7 +112,9 @@ bool StackAnalysis::run()
 						store,
 						store->getPointerOperand(),
 						store->getValueOperand()->getType(),
-						val2val);
+						val2val,
+						stackVars,
+						usesOfStack);
 			}
 			else if (LoadInst* load = dyn_cast<LoadInst>(&i))
 			{
@@ -118,20 +128,118 @@ bool StackAnalysis::run()
 						load,
 						load->getPointerOperand(),
 						load->getType(),
-						val2val);
+						val2val,
+						stackVars,
+						usesOfStack);
 			}
+
 		}
+
+		std::vector<llvm::AllocaInst*> stckV(stackVars.begin(), stackVars.end());
+
+		std::stable_sort(
+			stckV.begin(),
+			stckV.end(),
+			[this](Value* a, Value* b) -> bool
+			{
+				return _config->getStackVariableOffset(a) >
+						_config->getStackVariableOffset(b);
+			});
+
+		stackVarsMap[&f] = stckV;
 	}
+
+	mergeStackTypesPieces(stackVarsMap, usesOfStack);
 
 	return false;
 }
 
-void StackAnalysis::handleInstruction(
+void StackAnalysis::mergeStackTypesPieces(std::map<Function*,
+				std::vector<AllocaInst*>> &stackVarsMap,
+				std::map<AllocaInst*, std::vector<llvm::Instruction*>> &usesOfStack) const
+{
+	for (auto i: stackVarsMap)
+	{
+		if (i.second.size() < 2)
+			continue;
+
+		for (auto j = i.second.begin(), k = j+1; k != i.second.end(); j++, k++)
+		{
+			LOG << "\t" << llvmObjToString(*j) << std::endl;
+
+			size_t stackDiff = _config->getStackVariableOffset(*j)
+						- _config->getStackVariableOffset(*k);
+
+			size_t hiTySize = _abi->getTypeByteSize((*j)->getAllocatedType());
+			size_t loTySize = _abi->getTypeByteSize((*k)->getAllocatedType());
+
+			if (stackDiff + hiTySize == loTySize)
+			{
+				replaceUsageWithShiftWork(*j, *k, usesOfStack);
+			}
+		}
+	}
+}
+
+void StackAnalysis::replaceUsageWithShiftWork(AllocaInst *r, AllocaInst *w,
+	std::map<AllocaInst*, std::vector<llvm::Instruction*>> &usesOfStack) const
+{
+	for (auto i: usesOfStack[r])
+	{
+		/*
+		if (StoreInst *store = dyn_cast<StoreInst>(i))
+		{
+			auto l = new LoadInst(w, "", store);
+			auto intType = IntegerType::get(_module->getContext(), 64);
+
+			auto an = BinaryOperator::Create(
+					Instruction::And,
+					l,
+					llvm::ConstantInt::get(intType, 0xffffffff00000000),
+					"",
+					store);
+
+			auto ext = 
+
+
+			auto or = BinaryOperator::Create(
+					Instruction::Or,
+					a,
+					ext,
+					"",
+					store);
+
+			store->replaceAllUsesWith(or);
+		}
+		else */if (LoadInst *load = dyn_cast<LoadInst>(i))
+		{
+			auto size = 32;
+			auto halfInt = IntegerType::get(_module->getContext(), 32);
+			auto intType = IntegerType::get(_module->getContext(), 64);
+
+			auto l = new LoadInst(w, "", load);
+			auto sh = BinaryOperator::Create(
+					Instruction::LShr,
+					l,
+					llvm::ConstantInt::get(intType, size),
+					"",
+					load);
+
+			auto tr = new TruncInst(sh, halfInt, "", load);
+
+			load->replaceAllUsesWith(tr);
+		}
+	}
+}
+
+	void StackAnalysis::handleInstruction(
 		ReachingDefinitionsAnalysis& RDA,
 		llvm::Instruction* inst,
 		llvm::Value* val,
 		llvm::Type* type,
-		std::map<llvm::Value*, llvm::Value*>& val2val)
+		std::map<llvm::Value*, llvm::Value*>& val2val,
+		std::set<llvm::AllocaInst*> &stackVars,
+		std::map<llvm::AllocaInst*, std::vector<llvm::Instruction*>> &usesOfStack)
 {
 	LOG << llvmObjToString(inst) << std::endl;
 
@@ -214,6 +322,9 @@ void StackAnalysis::handleInstruction(
 	LOG << "===> " << llvmObjToString(a) << std::endl;
 	LOG << "===> " << llvmObjToString(inst) << std::endl;
 	LOG << std::endl;
+
+	stackVars.insert(a);
+	usesOfStack[a].push_back(inst);
 
 	auto* s = dyn_cast<StoreInst>(inst);
 	auto* l = dyn_cast<LoadInst>(inst);

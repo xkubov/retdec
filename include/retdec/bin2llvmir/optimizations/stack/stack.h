@@ -37,10 +37,23 @@ class StackAnalysis : public llvm::ModulePass
 				llvm::Instruction* inst,
 				llvm::Value* val,
 				llvm::Type* type,
-				std::map<llvm::Value*, llvm::Value*>& val2val);
+				std::map<llvm::Value*, llvm::Value*>& val2val,
+				std::set<llvm::AllocaInst*> &stackVars,
+				std::map<llvm::AllocaInst*, std::vector<llvm::Instruction*>> &usesOfStack);
 		retdec::config::Object* getDebugStackVariable(
 				llvm::Function* fnc,
 				SymbolicTree& root);
+
+		void mergeStackTypesPieces(
+			std::map<llvm::Function*,
+				std::vector<llvm::AllocaInst*>> &stackVarsMap,
+			std::map<llvm::AllocaInst*,
+				std::vector<llvm::Instruction*>> &usesOfStack) const;
+		void replaceUsageWithShiftWork(
+				llvm::AllocaInst *r,
+				llvm::AllocaInst *w,
+				std::map<llvm::AllocaInst*,
+				std::vector<llvm::Instruction*>> &usesOfStack) const;
 
 	private:
 		llvm::Module* _module = nullptr;

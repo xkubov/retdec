@@ -58,7 +58,7 @@ BIN2LLVMIR_LLVM_PASSES_ONLY = ['-instcombine', '-tbaa', '-targetlibinfo', '-basi
                                '-constmerge', '-constprop', '-instnamer', '-domtree', '-instcombine']
 
 BIN2LLVMIR_PARAMS = ['-provider-init', '-decoder', '-verify', '-x87-fpu', '-main-detection', '-idioms-libgcc', '-inst-opt',
-                     '-cond-branch-opt', '-syscalls', '-stack', '-constants', '-param-return',
+                     '-cond-branch-opt', '-syscalls', '-dump-module', '-stack', '-dump-module', '-constants', '-dump-module', '-param-return', '-dump-module',
                      '-local-vars', '-inst-opt', '-simple-types', '-generate-dsm', '-remove-asm-instrs',
                      '-class-hierarchy', '-select-fncs', '-unreachable-funcs', '-inst-opt', '-x86-addr-spaces', '-value-protect'] \
                      + BIN2LLVMIR_LLVM_PASSES_ONLY + BIN2LLVMIR_LLVM_PASSES_ONLY + ['-simple-types',
