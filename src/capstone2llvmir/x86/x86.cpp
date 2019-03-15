@@ -3463,10 +3463,6 @@ void Capstone2LlvmIrTranslatorX86_impl::translateShiftRight(cs_insn* i, cs_x86* 
  */
 void Capstone2LlvmIrTranslatorX86_impl::translateShld(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
 {
-	if (getBasicMode() != CS_MODE_32)
-	{
-		throw GenericError("translateShld: basic mode != CS_MODE_32");
-	}
 	EXPECT_IS_TERNARY(i, xi, irb);
 
 	std::tie(op0, op1, op2) = loadOpTernary(xi, irb);
@@ -3510,10 +3506,6 @@ void Capstone2LlvmIrTranslatorX86_impl::translateShld(cs_insn* i, cs_x86* xi, ll
  */
 void Capstone2LlvmIrTranslatorX86_impl::translateShrd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
 {
-	if (getBasicMode() != CS_MODE_32)
-	{
-		throw GenericError("translateShld: basic mode != CS_MODE_32");
-	}
 	EXPECT_IS_TERNARY(i, xi, irb);
 
 	std::tie(op0, op1, op2) = loadOpTernary(xi, irb);
