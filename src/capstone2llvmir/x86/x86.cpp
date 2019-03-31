@@ -1855,6 +1855,81 @@ void Capstone2LlvmIrTranslatorX86_impl::translateAdd(cs_insn* i, cs_x86* xi, llv
 }
 
 /**
+ * X86_INS_ADDSS
+ */
+void Capstone2LlvmIrTranslatorX86_impl::translateAddss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	op0 = loadOp(xi->operands[0], irb);
+	auto* tr0 = irb.CreateZExtOrTrunc(op0, irb.getInt32Ty());
+	auto* f0 = irb.CreateBitCast(tr0, irb.getFloatTy());
+	auto* rsh = irb.CreateLShr(op0, 32);
+	op0 = irb.CreateShl(rsh, 32);
+
+	op1 = loadOp(xi->operands[1], irb);
+	auto* tr1 = irb.CreateZExtOrTrunc(op1, irb.getInt32Ty());
+	auto* f1 = irb.CreateBitCast(tr1, irb.getFloatTy());
+
+	auto* fadd = irb.CreateFAdd(f0, f1);
+	auto* add = irb.CreateBitCast(fadd, irb.getInt32Ty());
+	op1 = irb.CreateZExt(add, irb.getInt128Ty());
+
+	op1 = irb.CreateOr(op0, op1);
+	storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+}
+
+/**
+ * X86_INS_MULSS
+ */
+void Capstone2LlvmIrTranslatorX86_impl::translateMulss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	op0 = loadOp(xi->operands[0], irb);
+	auto* tr0 = irb.CreateZExtOrTrunc(op0, irb.getInt32Ty());
+	auto* f0 = irb.CreateBitCast(tr0, irb.getFloatTy());
+	auto* rsh = irb.CreateLShr(op0, 32);
+	op0 = irb.CreateShl(rsh, 32);
+
+	op1 = loadOp(xi->operands[1], irb);
+	auto* tr1 = irb.CreateZExtOrTrunc(op1, irb.getInt32Ty());
+	auto* f1 = irb.CreateBitCast(tr1, irb.getFloatTy());
+
+	auto* fmul = irb.CreateFMul(f0, f1);
+	auto* mul = irb.CreateBitCast(fmul, irb.getInt32Ty());
+	op1 = irb.CreateZExt(mul, irb.getInt128Ty());
+
+	op1 = irb.CreateOr(op0, op1);
+	storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+}
+
+/**
+ * X86_INS_DIVSS
+ */
+void Capstone2LlvmIrTranslatorX86_impl::translateDivss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	op0 = loadOp(xi->operands[0], irb);
+	auto* tr0 = irb.CreateZExtOrTrunc(op0, irb.getInt32Ty());
+	auto* f0 = irb.CreateBitCast(tr0, irb.getFloatTy());
+	auto* rsh = irb.CreateLShr(op0, 32);
+	op0 = irb.CreateShl(rsh, 32);
+
+	op1 = loadOp(xi->operands[1], irb);
+	auto* tr1 = irb.CreateZExtOrTrunc(op1, irb.getInt32Ty());
+	auto* f1 = irb.CreateBitCast(tr1, irb.getFloatTy());
+
+	auto* fdiv = irb.CreateFDiv(f0, f1);
+	auto* div = irb.CreateBitCast(fdiv, irb.getInt32Ty());
+	op1 = irb.CreateZExt(div, irb.getInt128Ty());
+
+	op1 = irb.CreateOr(op0, op1);
+	storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+}
+
+/**
  * X86_INS_TEST, X86_INS_AND
  */
 void Capstone2LlvmIrTranslatorX86_impl::translateAnd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
@@ -2641,12 +2716,35 @@ void Capstone2LlvmIrTranslatorX86_impl::translateMov(cs_insn* i, cs_x86* xi, llv
 		case X86_INS_MOVSXD:
 			storeOp(xi->operands[0], op1, irb, eOpConv::SEXT_TRUNC);
 			break;
+		case X86_INS_MOVSS:
 		case X86_INS_MOVZX:
 			storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
 			break;
 		default:
 			throw GenericError("Unhandle instr ID in translateMov().");
 	}
+}
+
+/**
+ * TODO
+ */
+void Capstone2LlvmIrTranslatorX86_impl::translateMovss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	op1 = loadOp(xi->operands[1], irb);
+	auto* tr = irb.CreateZExtOrTrunc(op1, irb.getInt32Ty());
+
+	if (xi->operands[0].size == 16)
+	{
+		op0 = loadOp(xi->operands[0], irb);
+		auto* rsh = irb.CreateLShr(op0, 32);
+		op0 = irb.CreateShl(rsh, 32);
+		op1 = irb.CreateZExt(tr, irb.getInt128Ty());
+		op1 = irb.CreateOr(op0, op1);
+	}
+
+	storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
 }
 
 /**

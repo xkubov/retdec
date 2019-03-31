@@ -251,6 +251,9 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateAam(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateAdc(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateAdd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateAddss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateMulss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateDivss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateAnd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateBsf(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateBswap(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
@@ -316,6 +319,7 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateLoadString(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateLoop(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateMov(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateMovss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateMoveString(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateMul(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateNeg(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
