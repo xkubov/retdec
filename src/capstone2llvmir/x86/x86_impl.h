@@ -276,6 +276,7 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateCompareString(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCpuid(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCqo(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateCvtsi2ss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCwd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCwde(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateDaaDas(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);

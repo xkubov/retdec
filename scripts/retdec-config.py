@@ -120,7 +120,9 @@ BIN2LLVMIR_LLVM_PASSES_ONLY = [
 
 BIN2LLVMIR_PARAMS = [
     '-provider-init',
+    '-dump-module',
     '-decoder',
+    '-dump-module',
     '-verify',
     '-x87-fpu',
     '-main-detection',
@@ -130,6 +132,7 @@ BIN2LLVMIR_PARAMS = [
     '-syscalls',
     '-stack',
     '-constants',
+    '-dump-module',
     '-param-return',
     '-local-vars',
     '-inst-opt',

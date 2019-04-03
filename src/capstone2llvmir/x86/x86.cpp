@@ -532,6 +532,74 @@ void Capstone2LlvmIrTranslatorX86_impl::generateRegistersCommon()
 	createRegister(X86_REG_XMM30, _regLt);
 	createRegister(X86_REG_XMM31, _regLt);
 
+	// XMMF.
+	createRegister(X86_REG_XMMF0, _regLt);
+	createRegister(X86_REG_XMMF1, _regLt);
+	createRegister(X86_REG_XMMF2, _regLt);
+	createRegister(X86_REG_XMMF3, _regLt);
+	createRegister(X86_REG_XMMF4, _regLt);
+	createRegister(X86_REG_XMMF5, _regLt);
+	createRegister(X86_REG_XMMF6, _regLt);
+	createRegister(X86_REG_XMMF7, _regLt);
+	createRegister(X86_REG_XMMF8, _regLt);
+	createRegister(X86_REG_XMMF9, _regLt);
+	createRegister(X86_REG_XMMF10, _regLt);
+	createRegister(X86_REG_XMMF11, _regLt);
+	createRegister(X86_REG_XMMF12, _regLt);
+	createRegister(X86_REG_XMMF13, _regLt);
+	createRegister(X86_REG_XMMF14, _regLt);
+	createRegister(X86_REG_XMMF15, _regLt);
+	createRegister(X86_REG_XMMF16, _regLt);
+	createRegister(X86_REG_XMMF17, _regLt);
+	createRegister(X86_REG_XMMF18, _regLt);
+	createRegister(X86_REG_XMMF19, _regLt);
+	createRegister(X86_REG_XMMF20, _regLt);
+	createRegister(X86_REG_XMMF21, _regLt);
+	createRegister(X86_REG_XMMF22, _regLt);
+	createRegister(X86_REG_XMMF23, _regLt);
+	createRegister(X86_REG_XMMF24, _regLt);
+	createRegister(X86_REG_XMMF25, _regLt);
+	createRegister(X86_REG_XMMF26, _regLt);
+	createRegister(X86_REG_XMMF27, _regLt);
+	createRegister(X86_REG_XMMF28, _regLt);
+	createRegister(X86_REG_XMMF29, _regLt);
+	createRegister(X86_REG_XMMF30, _regLt);
+	createRegister(X86_REG_XMMF31, _regLt);
+
+	// XMMD.
+	createRegister(X86_REG_XMMD0, _regLt);
+	createRegister(X86_REG_XMMD1, _regLt);
+	createRegister(X86_REG_XMMD2, _regLt);
+	createRegister(X86_REG_XMMD3, _regLt);
+	createRegister(X86_REG_XMMD4, _regLt);
+	createRegister(X86_REG_XMMD5, _regLt);
+	createRegister(X86_REG_XMMD6, _regLt);
+	createRegister(X86_REG_XMMD7, _regLt);
+	createRegister(X86_REG_XMMD8, _regLt);
+	createRegister(X86_REG_XMMD9, _regLt);
+	createRegister(X86_REG_XMMD10, _regLt);
+	createRegister(X86_REG_XMMD11, _regLt);
+	createRegister(X86_REG_XMMD12, _regLt);
+	createRegister(X86_REG_XMMD13, _regLt);
+	createRegister(X86_REG_XMMD14, _regLt);
+	createRegister(X86_REG_XMMD15, _regLt);
+	createRegister(X86_REG_XMMD16, _regLt);
+	createRegister(X86_REG_XMMD17, _regLt);
+	createRegister(X86_REG_XMMD18, _regLt);
+	createRegister(X86_REG_XMMD19, _regLt);
+	createRegister(X86_REG_XMMD20, _regLt);
+	createRegister(X86_REG_XMMD21, _regLt);
+	createRegister(X86_REG_XMMD22, _regLt);
+	createRegister(X86_REG_XMMD23, _regLt);
+	createRegister(X86_REG_XMMD24, _regLt);
+	createRegister(X86_REG_XMMD25, _regLt);
+	createRegister(X86_REG_XMMD26, _regLt);
+	createRegister(X86_REG_XMMD27, _regLt);
+	createRegister(X86_REG_XMMD28, _regLt);
+	createRegister(X86_REG_XMMD29, _regLt);
+	createRegister(X86_REG_XMMD30, _regLt);
+	createRegister(X86_REG_XMMD31, _regLt);
+
 	// YMM.
 	createRegister(X86_REG_YMM0, _regLt);
 	createRegister(X86_REG_YMM1, _regLt);
@@ -737,6 +805,18 @@ llvm::Value* Capstone2LlvmIrTranslatorX86_impl::loadRegister(
 		return nullptr;
 	}
 
+	if (dstType && r >= X86_REG_XMM0 && r <= X86_REG_XMM31)
+	{
+		if (dstType->isFloatTy())
+		{
+			r = X86_REG_XMMF31 - (X86_REG_XMM31 - r);
+		}
+		else if (dstType->isDoubleTy())
+		{
+			r = X86_REG_XMMD31 - (X86_REG_XMM31 - r);
+		}
+	}
+
 	auto* rt = getRegisterType(r);
 	auto pr = getParentRegister(r);
 	auto* reg = getRegister(pr);
@@ -784,6 +864,20 @@ llvm::StoreInst* Capstone2LlvmIrTranslatorX86_impl::storeRegister(
 		llvm::IRBuilder<>& irb,
 		eOpConv ct)
 {
+	if (r >= X86_REG_XMM0 && r <= X86_REG_XMM31)
+	{
+		auto *dstType = val->getType();
+
+		if (dstType->isFloatTy())
+		{
+			r = X86_REG_XMMF31 - (X86_REG_XMM31 - r);
+		}
+		else if (dstType->isDoubleTy())
+		{
+			r = X86_REG_XMMD31 - (X86_REG_XMM31 - r);
+		}
+	}
+
 	auto* rt = getRegisterType(r);
 	auto pr = getParentRegister(r);
 	auto* reg = getRegister(pr);
@@ -1085,7 +1179,7 @@ llvm::Value* Capstone2LlvmIrTranslatorX86_impl::loadOp(
 	{
 		case X86_OP_REG:
 		{
-			return loadRegister(op.reg, irb);
+			return loadRegister(op.reg, irb, ty);
 		}
 		case X86_OP_IMM:
 		{
@@ -1861,22 +1955,11 @@ void Capstone2LlvmIrTranslatorX86_impl::translateAddss(cs_insn* i, cs_x86* xi, l
 {
 	EXPECT_IS_BINARY(i, xi, irb);
 
-	op0 = loadOp(xi->operands[0], irb);
-	auto* tr0 = irb.CreateZExtOrTrunc(op0, irb.getInt32Ty());
-	auto* f0 = irb.CreateBitCast(tr0, irb.getFloatTy());
-	auto* rsh = irb.CreateLShr(op0, 32);
-	op0 = irb.CreateShl(rsh, 32);
+	op0 = loadOp(xi->operands[0], irb, irb.getFloatTy());
+	op1 = loadOp(xi->operands[1], irb, irb.getFloatTy());
+	auto* fadd = irb.CreateFAdd(op0, op1);
 
-	op1 = loadOp(xi->operands[1], irb);
-	auto* tr1 = irb.CreateZExtOrTrunc(op1, irb.getInt32Ty());
-	auto* f1 = irb.CreateBitCast(tr1, irb.getFloatTy());
-
-	auto* fadd = irb.CreateFAdd(f0, f1);
-	auto* add = irb.CreateBitCast(fadd, irb.getInt32Ty());
-	op1 = irb.CreateZExt(add, irb.getInt128Ty());
-
-	op1 = irb.CreateOr(op0, op1);
-	storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+	storeOp(xi->operands[0], fadd, irb, eOpConv::THROW);
 }
 
 /**
@@ -2147,6 +2230,16 @@ void Capstone2LlvmIrTranslatorX86_impl::translateCqo(cs_insn* i, cs_x86* xi, llv
 	op0 = loadRegister(X86_REG_RAX, irb);
 	auto* e = irb.CreateAShr(op0, getRegisterBitSize(X86_REG_RAX) - 1);
 	storeRegister(X86_REG_RDX, e, irb);
+}
+
+/**
+ * TODO
+ */
+void Capstone2LlvmIrTranslatorX86_impl::translateCvtsi2ss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	op1 = loadOp(xi->operands[1], irb);
+
+	storeOp(xi->operands[0], irb.CreateSIToFP(op1, irb.getFloatTy()2), irb);
 }
 
 /**
@@ -2732,19 +2825,10 @@ void Capstone2LlvmIrTranslatorX86_impl::translateMovss(cs_insn* i, cs_x86* xi, l
 {
 	EXPECT_IS_BINARY(i, xi, irb);
 
-	op1 = loadOp(xi->operands[1], irb);
-	auto* tr = irb.CreateZExtOrTrunc(op1, irb.getInt32Ty());
+	op1 = loadOp(xi->operands[1], irb, irb.getFloatTy());
+	op0 = loadOp(xi->operands[0], irb, irb.getFloatTy());
 
-	if (xi->operands[0].size == 16)
-	{
-		op0 = loadOp(xi->operands[0], irb);
-		auto* rsh = irb.CreateLShr(op0, 32);
-		op0 = irb.CreateShl(rsh, 32);
-		op1 = irb.CreateZExt(tr, irb.getInt128Ty());
-		op1 = irb.CreateOr(op0, op1);
-	}
-
-	storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+	storeOp(xi->operands[0], op1, irb, eOpConv::THROW);
 }
 
 /**

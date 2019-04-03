@@ -38,7 +38,7 @@ enum x86_reg_rflags
 	X86_REG_AC, // 18
 	X86_REG_VIF, // 19
 	X86_REG_VIP, // 20
-	X86_REG_ID // 21
+	X86_REG_ID, // 21
 	// reserved 22-31
 // RFLAGS
 	// reserved 32-63
@@ -123,6 +123,88 @@ enum x87_reg_tag
 	X87_REG_TAG5,
 	X87_REG_TAG6,
 	X87_REG_TAG7
+};
+
+/**
+ * A xmm register extension.
+ *
+ * Work with 128 bit xmm register can be devided into work with:
+ *   - scalar float registers,
+ *   - scalar double registers,
+ *   - vector registers.
+ *
+ * Having set of XMM* registers divided into 3 separate sets
+ * provide more flexibility during instruction translation
+ * which leads to better decompilation results.
+ */
+enum X86_sse_extension
+{
+// Float XMM
+	X86_REG_XMMF0 = X87_REG_TAG7 + 1,
+	X86_REG_XMMF1,
+	X86_REG_XMMF2,
+	X86_REG_XMMF3,
+	X86_REG_XMMF4,
+	X86_REG_XMMF5,
+	X86_REG_XMMF6,
+	X86_REG_XMMF7,
+	X86_REG_XMMF8,
+	X86_REG_XMMF9,
+ 	X86_REG_XMMF10,
+ 	X86_REG_XMMF11,
+ 	X86_REG_XMMF12,
+ 	X86_REG_XMMF13,
+ 	X86_REG_XMMF14,
+ 	X86_REG_XMMF15,
+ 	X86_REG_XMMF16,
+ 	X86_REG_XMMF17,
+ 	X86_REG_XMMF18,
+ 	X86_REG_XMMF19,
+ 	X86_REG_XMMF20,
+ 	X86_REG_XMMF21,
+ 	X86_REG_XMMF22,
+ 	X86_REG_XMMF23,
+ 	X86_REG_XMMF24,
+ 	X86_REG_XMMF25,
+ 	X86_REG_XMMF26,
+ 	X86_REG_XMMF27,
+ 	X86_REG_XMMF28,
+ 	X86_REG_XMMF29,
+ 	X86_REG_XMMF30,
+ 	X86_REG_XMMF31,
+// Double XMM
+	X86_REG_XMMD0,
+	X86_REG_XMMD1,
+	X86_REG_XMMD2,
+	X86_REG_XMMD3,
+	X86_REG_XMMD4,
+	X86_REG_XMMD5,
+	X86_REG_XMMD6,
+	X86_REG_XMMD7,
+	X86_REG_XMMD8,
+	X86_REG_XMMD9,
+ 	X86_REG_XMMD10,
+ 	X86_REG_XMMD11,
+ 	X86_REG_XMMD12,
+ 	X86_REG_XMMD13,
+ 	X86_REG_XMMD14,
+ 	X86_REG_XMMD15,
+ 	X86_REG_XMMD16,
+ 	X86_REG_XMMD17,
+ 	X86_REG_XMMD18,
+ 	X86_REG_XMMD19,
+ 	X86_REG_XMMD20,
+ 	X86_REG_XMMD21,
+ 	X86_REG_XMMD22,
+ 	X86_REG_XMMD23,
+ 	X86_REG_XMMD24,
+ 	X86_REG_XMMD25,
+ 	X86_REG_XMMD26,
+ 	X86_REG_XMMD27,
+ 	X86_REG_XMMD28,
+ 	X86_REG_XMMD29,
+ 	X86_REG_XMMD30,
+ 	X86_REG_XMMD31,
 };
 
 /**
