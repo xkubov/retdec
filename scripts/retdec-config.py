@@ -121,6 +121,7 @@ BIN2LLVMIR_LLVM_PASSES_ONLY = [
 BIN2LLVMIR_PARAMS = [
     '-provider-init',
     '-decoder',
+    '-dump-module',
     '-verify',
     '-x87-fpu',
     '-main-detection',

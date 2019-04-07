@@ -1134,6 +1134,7 @@ IrModifier::FunctionPair IrModifier::modifyFunction(
 		auto* v = *asIt;
 
 		assert(v->getType()->isPointerTy());
+
 		auto* conv = IrModifier::convertValueToType(
 				a,
 				v->getType()->getPointerElementType(),
@@ -1141,7 +1142,11 @@ IrModifier::FunctionPair IrModifier::modifyFunction(
 
 		auto* s = new StoreInst(conv, v);
 
-		if (auto* alloca = dyn_cast<AllocaInst>(v))
+		if (auto* load = dyn_cast<LoadInst>(v))
+		{
+			s->insertAfter(load);
+		}
+		else if (auto* alloca = dyn_cast<AllocaInst>(v))
 		{
 			s->insertAfter(alloca);
 		}
@@ -1295,6 +1300,10 @@ IrModifier::FunctionPair IrModifier::modifyFunction(
 						nc,
 						retVal->getType()->getPointerElementType(),
 						n);
+				if (auto* l = dyn_cast<LoadInst>(retVal))
+				{
+					l->insertBefore(n);
+				}
 				new StoreInst(conv, retVal, n);
 			}
 		}

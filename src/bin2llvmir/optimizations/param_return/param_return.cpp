@@ -19,7 +19,7 @@
 #include "retdec/utils/string.h"
 #include "retdec/bin2llvmir/optimizations/param_return/filter/filter.h"
 #include "retdec/bin2llvmir/optimizations/param_return/param_return.h"
-#define debug_enabled false
+#define debug_enabled true
 #include "retdec/bin2llvmir/utils/llvm.h"
 #include "retdec/bin2llvmir/providers/asm_instruction.h"
 #include "retdec/bin2llvmir/utils/ir_modifier.h"
@@ -800,6 +800,10 @@ void ParamReturn::applyToIr(DataFlowEntry& de)
 		for (auto& e : de.retEntries())
 		{
 			auto* l = new LoadInst(de.getRetValue(), "", e.getRetInstruction());
+			if (isa<PointerType>(l->getType()))
+			{
+				l = new LoadInst(l, "", e.getRetInstruction());
+			}
 			rets2vals[e.getRetInstruction()] = l;
 		}
 	}
@@ -813,7 +817,25 @@ void ParamReturn::applyToIr(DataFlowEntry& de)
 	{
 		if (a != nullptr)
 		{
-			definitionArgs.push_back(a);
+			Value* arg = a;
+			if (auto* reg = dyn_cast<PointerType>(arg->getType()))
+			{
+				if (isa<PointerType>(reg->getElementType()))
+				{
+					arg = new LoadInst(arg, "", &de.getFunction()->front().front());
+				}
+			}
+
+			definitionArgs.push_back(arg);
+		}
+	}
+
+	auto* retVal = de.getRetValue();
+	if (auto* p = dyn_cast<PointerType>(retVal->getType()))
+	{
+		if (isa<PointerType>(p->getElementType()))
+		{
+			retVal = new LoadInst(retVal, "");
 		}
 	}
 
@@ -825,7 +847,7 @@ void ParamReturn::applyToIr(DataFlowEntry& de)
 			de.isVariadic(),
 			rets2vals,
 			loadsOfCalls,
-			de.getRetValue(),
+			retVal,
 			definitionArgs,
 			de.argNames()).first;
 
@@ -950,7 +972,16 @@ std::map<CallInst*, std::vector<Value*>> ParamReturn::fetchLoadsOfCalls(
 				continue;
 			}
 
-			Value* l = new LoadInst(*aIt, "", call);
+			Value* toLoad = *aIt;
+			if (auto* reg = dyn_cast<PointerType>((*aIt)->getType()))
+			{
+				if (isa<PointerType>(reg->getElementType()))
+				{
+					toLoad = new LoadInst(*aIt, "", call);
+				}
+			}
+
+			Value* l = new LoadInst(toLoad, "", call);
 
 			if (tIt != types.end())
 			{

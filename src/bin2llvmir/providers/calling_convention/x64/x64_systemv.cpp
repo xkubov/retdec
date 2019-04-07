@@ -22,14 +22,14 @@ SystemVX64CallingConvention::SystemVX64CallingConvention(const Abi* a) :
 		X86_REG_R9
 	};
 	_paramFPRegs = {
-		X86_REG_XMM0,
-		X86_REG_XMM1,
-		X86_REG_XMM2,
-		X86_REG_XMM3,
-		X86_REG_XMM4,
-		X86_REG_XMM5,
-		X86_REG_XMM6,
-		X86_REG_XMM7
+		X86_REG_XMMF0_3,
+		X86_REG_XMMF1_3,
+		X86_REG_XMMF2_3,
+		X86_REG_XMMF3_3,
+		X86_REG_XMMF4_3,
+		X86_REG_XMMF5_3,
+		X86_REG_XMMF6_3,
+		X86_REG_XMMF7_3
 	};
 	_paramVectorRegs = {
 		X86_REG_XMM0,
@@ -47,8 +47,8 @@ SystemVX64CallingConvention::SystemVX64CallingConvention(const Abi* a) :
 		X86_REG_RDX
 	};
 	_returnFPRegs = {
-		X86_REG_XMM0,
-		X86_REG_XMM1
+		X86_REG_XMMF0_3,
+		X86_REG_XMMF1_3
 	};
 	_returnVectorRegs = {
 		X86_REG_XMM0,

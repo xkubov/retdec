@@ -1,4 +1,4 @@
-/**
+ /**
  * @file src/capstone2llvmir/x86/x86.cpp
  * @brief X86 implementation of @c Capstone2LlvmIrTranslator.
  * @copyright (c) 2017 Avast Software, licensed under the MIT license
@@ -197,6 +197,12 @@ uint32_t Capstone2LlvmIrTranslatorX86_impl::getParentRegister(uint32_t r) const
 			: r;
 }
 
+std::vector<uint32_t> Capstone2LlvmIrTranslatorX86_impl::getAlternativeViewRegisters(uint32_t r) const
+{
+	auto views = _reg2AltViewsMap.find(r);
+	return views != _reg2AltViewsMap.end() ? views->second : std::vector<uint32_t>();
+}
+
 //
 //==============================================================================
 // Pure virtual methods from Capstone2LlvmIrTranslator_impl
@@ -235,9 +241,60 @@ void Capstone2LlvmIrTranslatorX86_impl::generateDataLayout()
 	}
 }
 
+void Capstone2LlvmIrTranslatorX86_impl::generateRegistersAlternativeViews()
+{
+	for (auto rp: _reg2AltViewsMap)
+	{
+		auto reg = rp.first;
+		for (auto view: rp.second)
+		{
+			auto* viewt = getRegisterType(view);
+			auto* bitcast = llvm::ConstantExpr::getBitCast(getRegister(reg), viewt);
+			createRegister(view, _regLt);//, bitcast);
+		}
+	}
+}
+
+void Capstone2LlvmIrTranslatorX86_impl::generateRegistersAccessElements()
+{
+	auto* i8p = llvm::PointerType::get(
+		llvm::IntegerType::getInt8Ty(_module->getContext()), 0);
+
+	for (auto rp: _reg2AltViewsMap)
+	{
+		auto reg = rp.first;
+		for (auto view: rp.second)
+		{
+			auto rp = _reg2AccessMap.find(view);
+			if (rp != _reg2AccessMap.end())
+			{
+				auto* bitcast = llvm::ConstantExpr::getBitCast(getRegister(reg),
+											i8p);
+				for (auto access: rp->second)
+				{
+auto ar = access.first;
+					assert(llvm::isa<llvm::PointerType>(getRegisterType(ar)));
+					auto* elementType = llvm::dyn_cast<llvm::PointerType>(getRegisterType(ar))->getElementType();
+					auto idx = access.second*_module->getDataLayout().getTypeStoreSize(elementType);
+
+					auto* cIdx = llvm::ConstantInt::get(
+						llvm::IntegerType::getInt64Ty(_module->getContext()), idx);
+
+					llvm::ArrayRef<llvm::Constant*> indices({cIdx});
+					auto* ep = llvm::ConstantExpr::getGetElementPtr(nullptr, bitcast, indices);
+					ep = llvm::ConstantExpr::getBitCast(ep, getRegisterType(ar));
+					createRegister(ar, _regLt, ep);
+				}
+			}
+		}
+	}
+}
+
 void Capstone2LlvmIrTranslatorX86_impl::generateRegisters()
 {
 	generateRegistersCommon();
+	generateRegistersAlternativeViews();
+	generateRegistersAccessElements();
 
 	switch (_origBasicMode)
 	{
@@ -737,6 +794,21 @@ llvm::Value* Capstone2LlvmIrTranslatorX86_impl::loadRegister(
 		return nullptr;
 	}
 
+	if (r >= X86_REG_XMM0 && r <= X86_REG_XMM31)
+	{
+		if (dstType && dstType->isFloatTy())
+		{
+			r = X86_REG_XMMF31_3 - (X86_REG_XMM31 - r);
+		}
+		else if (dstType && dstType->isDoubleTy())
+		{
+			r = X86_REG_XMMD31_1 - (X86_REG_XMM31 - r);
+		}
+
+		auto* reg = getRegister(r);
+		return irb.CreateLoad(reg);
+	}
+
 	auto* rt = getRegisterType(r);
 	auto pr = getParentRegister(r);
 	auto* reg = getRegister(pr);
@@ -1085,7 +1157,7 @@ llvm::Value* Capstone2LlvmIrTranslatorX86_impl::loadOp(
 	{
 		case X86_OP_REG:
 		{
-			return loadRegister(op.reg, irb);
+			return loadRegister(op.reg, irb, ty);
 		}
 		case X86_OP_IMM:
 		{
@@ -2648,6 +2720,90 @@ void Capstone2LlvmIrTranslatorX86_impl::translateMov(cs_insn* i, cs_x86* xi, llv
 			throw GenericError("Unhandle instr ID in translateMov().");
 	}
 }
+
+void Capstone2LlvmIrTranslatorX86_impl::translateMovss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	auto* cZero = llvm::ConstantInt::get(irb.getInt64Ty(), 0);
+
+	if (xi->operands[1].size == 16)
+	{
+		op1 = loadOp(xi->operands[1], irb, irb.getFloatTy());
+		auto* gep = llvm::GetElementPtrInst::Create(nullptr, op1, {cZero}); //cZero, cThree});
+		op1 = irb.Insert(gep);
+		op1 = irb.CreateLoad(irb.getFloatTy(), op1);
+	}
+	else
+	{
+		op1 = loadOp(xi->operands[1], irb, irb.getFloatTy());
+	}
+
+	if (xi->operands[0].size == 16)
+	{
+		op0 = loadOp(xi->operands[0], irb, irb.getFloatTy());
+		auto* gep = llvm::GetElementPtrInst::Create(nullptr, op0, {cZero});//, cZero, cThree});
+		op0 = irb.Insert(gep);
+		
+		irb.CreateStore(op1, op0);
+	}
+	else
+	{
+		storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+	}
+}
+
+// TODO move me
+void Capstone2LlvmIrTranslatorX86_impl::translateAddss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	auto* cZero = llvm::ConstantInt::get(irb.getInt64Ty(), 0);
+	
+	if (xi->operands[1].size == 16)
+	{
+		op1 = loadRegister(xi->operands[1].reg, irb, irb.getFloatTy());
+		auto* gep = llvm::GetElementPtrInst::Create(nullptr, op1, {cZero});
+		op1 = irb.Insert(gep);
+		op1 = irb.CreateLoad(irb.getFloatTy(), op1);
+	}
+	else
+	{
+		op1 = loadOp(xi->operands[1], irb, irb.getFloatTy());
+	}
+
+	if (xi->operands[0].size == 16)
+	{
+		op0 = loadRegister(xi->operands[0].reg, irb, irb.getFloatTy());
+		auto* gep = llvm::GetElementPtrInst::Create(nullptr, op0, {cZero});
+		op0 = irb.Insert(gep);
+		auto* el = irb.CreateLoad(irb.getFloatTy(), op0);
+
+		op1 = irb.CreateFAdd(el, op1);
+
+		irb.CreateStore(op1, op0);
+	}
+	else
+	{
+		op0 = loadOp(xi->operands[0], irb, irb.getFloatTy());
+		op1 = irb.CreateFAdd(op0, op1);
+		storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+	}
+}
+
+void Capstone2LlvmIrTranslatorX86_impl::translateCvtsi2ss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	auto* cZero = llvm::ConstantInt::get(irb.getInt32Ty(), 0);
+	op0 = loadOp(xi->operands[0], irb, irb.getFloatTy()); 
+	auto* gep = llvm::GetElementPtrInst::Create(nullptr, op0, {cZero});
+	op0 = irb.Insert(gep);
+
+	op1 = loadOp(xi->operands[1], irb);
+	op1 = irb.CreateSIToFP(op1, irb.getFloatTy());
+
+	irb.CreateStore(op1, op0);
+}
+
 
 /**
  * X86_INS_MUL, X86_INS_IMUL (only unary form)
