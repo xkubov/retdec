@@ -83,6 +83,24 @@ llvm::GlobalVariable* Abi::getRegister(uint32_t r, bool use) const
 	return _id2regs[r];
 }
 
+llvm::Type* Abi::getRegisterType(uint32_t r) const
+{
+	auto* reg = getRegister(r);
+	if (reg == nullptr)
+	{
+		return nullptr;
+	}
+
+	assert(isa<PointerType>(reg->getType()));
+	auto* regT = dyn_cast<PointerType>(reg->getType());
+	if (auto* p = dyn_cast<PointerType>(regT->getElementType()))
+	{
+		return p->getElementType();
+	}
+
+	return regT->getElementType();
+}
+
 uint32_t Abi::getRegisterId(const llvm::Value* r) const
 {
 	auto it = _regs2id.find(r);

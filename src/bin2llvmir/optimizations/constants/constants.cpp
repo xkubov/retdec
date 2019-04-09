@@ -162,6 +162,14 @@ void ConstantsAnalysis::checkForGlobalInInstruction(
 	auto* gv = dyn_cast<GlobalVariable>(root.value);
 	if (isa<LoadInst>(inst) && gv && root.ops.size() <= 1)
 	{
+		if (auto* p = dyn_cast<PointerType>(root.value->getType()))
+		{
+			if (isa<PointerType>(p->getElementType()))
+			{
+				return;
+			}
+		}
+	
 		auto* conv = IrModifier::convertConstantToType(gv, val->getType());
 		inst->replaceUsesOfWith(val, conv);
 		return;
