@@ -951,12 +951,20 @@ llvm::GlobalVariable* Capstone2LlvmIrTranslator_impl<CInsn, CInsnOp>::createRegi
 		{
 			initializer = llvm::ConstantFP::get(rt, 0);
 		}
+		else if (auto* st = llvm::dyn_cast<llvm::StructType>(rt))
+		{
+			initializer = llvm::ConstantAggregateZero::get(st);
+		}
+		else if (auto* st = llvm::dyn_cast<llvm::PointerType>(rt))
+		{
+			initializer = llvm::ConstantPointerNull::get(st);
+		}
 		else
 		{
 			throw GenericError("Unhandled register type.");
 		}
 	}
-
+	
 	auto* gv = new llvm::GlobalVariable(
 			*_module,
 			rt,
