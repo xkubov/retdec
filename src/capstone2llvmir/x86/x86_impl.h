@@ -60,6 +60,7 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		virtual llvm::Function* getX87TagLoadFunction() const override;
 
 		virtual uint32_t getParentRegister(uint32_t r) const override;
+		virtual std::vector<uint32_t> getAlternativeViewRegisters(uint32_t r) const override;
 //
 //==============================================================================
 // Pure virtual methods from Capstone2LlvmIrTranslator_impl
@@ -84,6 +85,8 @@ class Capstone2LlvmIrTranslatorX86_impl :
 //==============================================================================
 //
 	protected:
+		void generateRegistersAlternativeViews();
+		void generateRegistersAccessElements();
 		void generateRegistersCommon();
 		void generateRegisters16();
 		void generateRegisters32();
@@ -98,6 +101,8 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void initializeRegistersParentMapToOther(
 				const std::vector<x86_reg>& rs,
 				x86_reg other);
+		void initializeRegisterAlternativeViewMap();
+		void initializeRegisterAccessMap();
 		uint32_t getAccumulatorRegister(std::size_t size);
 		uint32_t getStackPointerRegister();
 		uint32_t getBasePointerRegister();
@@ -224,6 +229,8 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		/// Always use @c getParentRegister() method to get values from this
 		/// map -- it will deal with added enums.
 		std::vector<uint32_t> _reg2parentMap;
+		std::map<uint32_t, std::vector<uint32_t>> _reg2AltViewsMap;
+		std::map<uint32_t, std::vector<std::pair<uint32_t, uint32_t>>> _reg2AccessMap;
 
 		/// Mapping of Capstone instruction IDs to their translation functions.
 		static std::map<
@@ -251,6 +258,8 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateAam(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateAdc(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateAdd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateAddss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateCvt(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateAnd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateBsf(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateBswap(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
@@ -278,6 +287,7 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateDaaDas(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateDec(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateDiv(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateDivss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateEnter(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateFabs(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateFadd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
@@ -316,8 +326,11 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateLoadString(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateLoop(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateMov(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateMovss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateMovsd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateMoveString(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateMul(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateMulss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateNeg(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateNop(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateNot(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
