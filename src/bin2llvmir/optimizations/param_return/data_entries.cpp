@@ -28,10 +28,20 @@ void ReturnEntry::addRetStore(llvm::StoreInst* st)
 {
 	_retStores.push_back(st);
 
-	if (std::find(
-		_retValues.begin(),
-		_retValues.end(),
-		st->getPointerOperand()) != _retValues.end())
+	if (auto* l = dyn_cast<LoadInst>(st->getPointerOperand()))
+	{
+		if (std::find(
+			_retValues.begin(),
+			_retValues.end(),
+			l->getPointerOperand()) != _retValues.end())
+		{
+			_retValues.push_back(l->getPointerOperand());
+		}
+	}
+	else if (std::find(
+			_retValues.begin(),
+			_retValues.end(),
+			st->getPointerOperand()) != _retValues.end())
 	{
 		_retValues.push_back(st->getPointerOperand());
 	}
@@ -44,7 +54,14 @@ void ReturnEntry::setRetStores(std::vector<llvm::StoreInst*>&& stores)
 	std::set<Value*> vals;
 	for (auto& i: _retStores)
 	{
-		vals.insert(i->getPointerOperand());
+		if (auto* l = dyn_cast<LoadInst>(i->getPointerOperand()))
+		{
+			vals.insert(l->getPointerOperand());
+		}
+		else
+		{
+			vals.insert(i->getPointerOperand());
+		}
 	}
 
 	_retValues.assign(vals.begin(), vals.end());
@@ -57,7 +74,14 @@ void ReturnEntry::setRetStores(const std::vector<llvm::StoreInst*>& stores)
 	std::set<Value*> vals;
 	for (auto& i: _retStores)
 	{
-		vals.insert(i->getPointerOperand());
+		if (auto* l = dyn_cast<LoadInst>(i->getPointerOperand()))
+		{
+			vals.insert(l->getPointerOperand());
+		}
+		else
+		{
+			vals.insert(i->getPointerOperand());
+		}
 	}
 
 	_retValues.assign(vals.begin(), vals.end());
@@ -297,7 +321,14 @@ void CallEntry::setArgStores(std::vector<llvm::StoreInst*>&& stores)
 	std::set<llvm::Value*> vals;
 	for (auto& i : _argStores)
 	{
-		vals.insert(i->getPointerOperand());
+		if (auto* l = dyn_cast<LoadInst>(i->getPointerOperand()))
+		{
+			vals.insert(l->getPointerOperand());
+		}
+		else
+		{
+			vals.insert(i->getPointerOperand());
+		}
 	}
 
 	_args.assign(vals.begin(), vals.end());
@@ -312,6 +343,10 @@ void CallEntry::setArgs(std::vector<Value*>&& args)
 			[args](StoreInst* st)
 			{
 				auto* op = st->getPointerOperand();
+				if (auto* l = dyn_cast<LoadInst>(op))
+				{
+					op = l->getPointerOperand();
+				}
 				return std::find(
 					args.begin(),
 					args.end(), op) == args.end();

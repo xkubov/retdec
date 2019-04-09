@@ -171,6 +171,7 @@ void Decoder::initEnvironmentRegisters()
 			config::Object cr(gv.getName(), s);
 			cr.type.setLlvmIr(llvmObjToString(gv.getValueType()));
 			cr.setRealName(gv.getName());
+			cr.setIsFromDebug(true);
 			_config->getConfig().registers.insert(cr);
 
 			_abi->addRegister(regNum, &gv);

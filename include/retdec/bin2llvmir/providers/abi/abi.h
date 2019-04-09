@@ -48,6 +48,7 @@ class Abi
 		virtual bool isGeneralPurposeRegister(const llvm::Value* val) const = 0;
 
 		llvm::GlobalVariable* getRegister(uint32_t r, bool use = true) const;
+		llvm::Type* getRegisterType(uint32_t r) const;
 		uint32_t getRegisterId(const llvm::Value* r) const;
 		const std::vector<llvm::GlobalVariable*>& getRegisters() const;
 		llvm::GlobalVariable* getStackPointerRegister() const;
