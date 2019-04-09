@@ -109,6 +109,13 @@ class Capstone2LlvmIrTranslatorX86 : virtual public Capstone2LlvmIrTranslator
 		 * register @p r. Register can be its own parent.
 		 */
 		virtual uint32_t getParentRegister(uint32_t r) const = 0;
+
+		/**
+		 * @return Vector of caspstone registers that represent
+		 * different view on structure of the specifide Capstone
+		 * register @p r.
+		 */
+		virtual std::vector<uint32_t> getAlternativeViewRegisters(uint32_t r) const = 0;
 };
 
 } // namespace capstone2llvmir

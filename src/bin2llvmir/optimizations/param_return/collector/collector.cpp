@@ -81,7 +81,8 @@ void Collector::collectDefArgs(DataFlowEntry* dataflow) const
 			}
 
 			if ((use->defs.empty() || use->isUndef())
-					&& added.find(ptr) == added.end())
+					&& added.find(ptr) == added.end()
+					&& !isa<PointerType>(dyn_cast<PointerType>(ptr->getType())->getElementType()))
 			{
 				dataflow->addArg(ptr);
 				added.insert(ptr);
