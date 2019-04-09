@@ -43,12 +43,15 @@ void Filter::estimateRetValue(DataFlowEntry* de) const
 		if (!de->retEntries().empty()
 			&& !de->retEntries().front().retValues().empty())
 		{
-			retType = de->retEntries().front().retValues().front()->getType();
-			if (auto* p = dyn_cast<PointerType>(retType))
-			{
-				retType = p->getElementType();
-			}
 			retValue = de->retEntries().front().retValues().front();
+			if (_abi->isRegister(retValue))
+			{
+				retType = _abi->getRegisterType(_abi->getRegisterId(retValue));
+			}
+			else
+			{
+				retType = retValue->getType();
+			}
 		}
 		else
 		{
@@ -60,7 +63,9 @@ void Filter::estimateRetValue(DataFlowEntry* de) const
 			// This is why retType is not set to any type.
 			if (!_cc->getReturnRegisters().empty())
 			{
-				retValue = _abi->getRegister(_cc->getReturnRegisters().front());
+				auto reg = _cc->getReturnRegisters().front();
+				retValue = _abi->getRegister(reg);
+				retType = _abi->getRegisterType(reg);
 			}
 		}
 	}
