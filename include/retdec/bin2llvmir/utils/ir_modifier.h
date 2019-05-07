@@ -13,6 +13,9 @@
 #include "retdec/bin2llvmir/providers/config.h"
 #include "retdec/bin2llvmir/providers/fileimage.h"
 
+#include "retdec/bin2llvmir/utils/llvm.h"
+#include "retdec/bin2llvmir/utils/debug.h"
+
 namespace retdec {
 namespace bin2llvmir {
 

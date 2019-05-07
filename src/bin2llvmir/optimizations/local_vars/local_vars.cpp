@@ -87,10 +87,18 @@ bool LocalVars::runOnModule(Module& M)
 			for (auto& a : call->arg_operands())
 			{
 				auto* aa = dyn_cast_or_null<Instruction>(llvm_utils::skipCasts(a));
+				if (auto* p = dyn_cast_or_null<LoadInst>(aa))
+				{
+					if (auto* pp = dyn_cast<LoadInst>(p->getPointerOperand()))
+					{
+						aa = pp;
+					}
+				}
 				if (aa == nullptr)
 				{
 					continue;
 				}
+
 				auto* use = RDA.getUse(aa);
 				if (use == nullptr || use->defs.size() != 1)
 				{

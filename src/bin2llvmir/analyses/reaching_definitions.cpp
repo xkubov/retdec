@@ -117,7 +117,15 @@ void ReachingDefinitionsAnalysis::initializeBasicBlocks(llvm::Function& F)
 			}
 			else if (auto* s = dyn_cast<StoreInst>(&I))
 			{
-				if (!isa<GlobalVariable>(s->getPointerOperand())
+				/*if (auto* l = dyn_cast<LoadInst>(s->getPointerOperand()))
+				{
+					if (isa<GlobalVariable>(l->getPointerOperand()))
+					{
+						bbe.defs.push_back(Definition(s, l->getPointerOperand()));
+						continue;
+					}
+				}
+				else */if (!isa<GlobalVariable>(s->getPointerOperand())
 						&& !isa<AllocaInst>(s->getPointerOperand()))
 				{
 					continue;

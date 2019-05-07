@@ -2842,7 +2842,7 @@ void Capstone2LlvmIrTranslatorX86_impl::translateDivss(cs_insn* i, cs_x86* xi, l
 {
 	EXPECT_IS_BINARY(i, xi, irb);
 
-	llvm::Type* divType = i->id == X86_INS_MULSS ? irb.getFloatTy() : irb.getDoubleTy();
+	llvm::Type* divType = i->id == X86_INS_DIVSS ? irb.getFloatTy() : irb.getDoubleTy();
 
 	if (xi->operands[1].size == 16)
 	{
@@ -2894,11 +2894,16 @@ void Capstone2LlvmIrTranslatorX86_impl::translateCvt(cs_insn* i, cs_x86* xi, llv
 			break;
 
 		case X86_INS_CVTSS2SD:
+			std::cout << "I am cvtss2sd" << std::endl;
 			op0 = loadOp(xi->operands[0], irb, irb.getDoubleTy()); 
 
 			op1 = loadOp(xi->operands[1], irb, irb.getFloatTy());
-			op1 = irb.CreateLoad(op1);
-			op1 = irb.CreateFPCast(op1, irb.getDoubleTy());
+			op1->dump();
+			std::cout << std::endl;
+			//op1 = irb.CreateLoad(op1);
+			//op1->getType()->dump();
+			//std::cout << std::endl;
+			op1 = irb.CreateFPExt(op1, irb.getDoubleTy());
 
 			irb.CreateStore(op1, op0);
 			break;
@@ -2926,11 +2931,12 @@ void Capstone2LlvmIrTranslatorX86_impl::translateCvt(cs_insn* i, cs_x86* xi, llv
 			break;
 
 		case X86_INS_CVTSD2SS:
+			std::cout << "I am cvtsd2ss" << std::endl;
 			op0 = loadOp(xi->operands[0], irb, irb.getFloatTy()); 
 
 			op1 = loadOp(xi->operands[1], irb, irb.getDoubleTy());
 			op1 = irb.CreateLoad(op1);
-			op1 = irb.CreateFPCast(op1, irb.getFloatTy());
+			op1 = irb.CreateFPTrunc(op1, irb.getFloatTy());
 
 			irb.CreateStore(op1, op0);
 			break;
