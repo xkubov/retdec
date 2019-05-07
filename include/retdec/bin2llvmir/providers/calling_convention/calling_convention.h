@@ -74,6 +74,7 @@ class CallingConvention
 		bool respectsRegisterCouples() const;
 
 		virtual std::size_t getMaxBytesPerStackParam() const;
+		virtual std::size_t getMaxBytesForStackType(llvm::Type* t) const;
 
 	// Values.
 	public:

@@ -130,6 +130,13 @@ std::size_t CallingConvention::getMaxBytesPerStackParam() const
 	return _abi->getWordSize();
 }
 
+std::size_t CallingConvention::getMaxBytesForStackType(llvm::Type* t) const
+{
+	assert(t != nullptr);
+	(void)t;
+	return _abi->getWordSize();
+}
+
 bool CallingConvention::valueCanBeParameter(const Value *val) const
 {
 	if (_abi->isStackVariable(val))
