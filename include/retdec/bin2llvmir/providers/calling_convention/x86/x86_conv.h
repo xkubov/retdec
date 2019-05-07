@@ -23,6 +23,7 @@ class X86CallingConvention: public CallingConvention
 	//
 	public:
 		virtual std::size_t getMaxBytesPerStackParam() const override;
+		virtual std::size_t getMaxBytesForStackType(llvm::Type* t) const override;
 };
 
 }

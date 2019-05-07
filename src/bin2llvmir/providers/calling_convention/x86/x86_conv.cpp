@@ -22,5 +22,15 @@ std::size_t X86CallingConvention::getMaxBytesPerStackParam() const
 	return _abi->getWordSize()*2;
 }
 
+std::size_t X86CallingConvention::getMaxBytesForStackType(llvm::Type* t) const
+{
+	if (t->isFloatingPointTy())
+	{
+		return _abi->getWordSize()*2;
+	}
+
+	return _abi->getWordSize();
+}
+
 }
 }
