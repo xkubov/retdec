@@ -17,7 +17,7 @@ version_filename = 'version.txt'
 arch_suffix = 'tar.xz'
 
 sha256hash_ref = '7a5b06ecbe97e7c90e733b74284bdce3c577af60916eddd219b42d26b5b274b0'
-version = '2019-03-03'
+version = '2019-03-08'
 
 arch_name = 'retdec-support' + '_' + version + '.' + arch_suffix
 
