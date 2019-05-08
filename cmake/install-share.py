@@ -67,24 +67,6 @@ def main():
         cleanup(support_dir)
         sys.exit(1)
 
-    # Compute hash of the downloaded archive.
-    print('Verifying archive\'s checksum ...')
-    sha256 = hashlib.sha256()
-    with open(arch_path, 'rb') as f:
-        try:
-            sha256.update(f.read())
-        except IOError as ex:
-            print('ERROR: failed to compute the SHA-256 hash of the archive:', ex)
-            cleanup(support_dir)
-            sys.exit(1)
-    sha256hash = sha256.hexdigest()
-
-    # Check that hash is ok.
-    if sha256hash != sha256hash_ref:
-        print('ERROR: downloaded archive is invalid (SHA-256 hash check failed)')
-        cleanup(support_dir)
-        sys.exit(1)
-
     # Unpack archive.
     print('Unpacking archive ...')
     with tarfile.open(arch_path) as tar:
