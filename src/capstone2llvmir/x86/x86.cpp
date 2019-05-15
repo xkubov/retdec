@@ -2771,8 +2771,40 @@ void Capstone2LlvmIrTranslatorX86_impl::translateMovsd(cs_insn* i, cs_x86* xi, l
 	}
 }
 
-// TODO move me
 void Capstone2LlvmIrTranslatorX86_impl::translateAddss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	EXPECT_IS_BINARY(i, xi, irb);
+
+	llvm::Type* addType = i->id == X86_INS_ADDSS ? irb.getFloatTy() : irb.getDoubleTy();
+
+	if (xi->operands[1].size == 16)
+	{
+		op1 = loadRegister(xi->operands[1].reg, irb, addType);
+		op1 = irb.CreateLoad(addType, op1);
+	}
+	else
+	{
+		op1 = loadOp(xi->operands[1], irb, addType);
+	}
+
+	if (xi->operands[0].size == 16)
+	{
+		op0 = loadRegister(xi->operands[0].reg, irb, addType);
+		auto* el = irb.CreateLoad(addType, op0);
+
+		op1 = irb.CreateFAdd(el, op1);
+
+		irb.CreateStore(op1, op0);
+	}
+	else
+	{
+		op0 = loadOp(xi->operands[0], irb, addType);
+		op1 = irb.CreateFAdd(op0, op1);
+		storeOp(xi->operands[0], op1, irb, eOpConv::ZEXT_TRUNC);
+	}
+}
+
+void Capstone2LlvmIrTranslatorX86_impl::translateSubss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
 {
 	EXPECT_IS_BINARY(i, xi, irb);
 
@@ -2944,6 +2976,11 @@ void Capstone2LlvmIrTranslatorX86_impl::translateCvt(cs_insn* i, cs_x86* xi, llv
 		default:
 			throw GenericError("Not handled instruction.");
 	}
+}
+
+void Capstone2LlvmIrTranslatorX86_impl::translateCmpss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb)
+{
+	assert(false && "Not implemented");
 }
 
 /**

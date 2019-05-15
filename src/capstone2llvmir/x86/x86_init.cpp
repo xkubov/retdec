@@ -1720,8 +1720,8 @@ Capstone2LlvmIrTranslatorX86_impl::_i2fm =
 		{X86_INS_FSUBR, &Capstone2LlvmIrTranslatorX86_impl::translateFsubr},
 		{X86_INS_FISUBR, &Capstone2LlvmIrTranslatorX86_impl::translateFsubr},
 		{X86_INS_FSUBRP, &Capstone2LlvmIrTranslatorX86_impl::translateFsubr},
-		{X86_INS_SUBSD, nullptr},
-		{X86_INS_SUBSS, nullptr},
+		{X86_INS_SUBSD, &Capstone2LlvmIrTranslatorX86_impl::translateSubss},
+		{X86_INS_SUBSS, &Capstone2LlvmIrTranslatorX86_impl::translateSubss},
 		{X86_INS_FSUB, &Capstone2LlvmIrTranslatorX86_impl::translateFsub},
 		{X86_INS_FISUB, &Capstone2LlvmIrTranslatorX86_impl::translateFsub},
 		{X86_INS_FSUBP, &Capstone2LlvmIrTranslatorX86_impl::translateFsub},
@@ -2363,7 +2363,7 @@ Capstone2LlvmIrTranslatorX86_impl::_i2fm =
 		{X86_INS_FENI8087_NOP, &Capstone2LlvmIrTranslatorX86_impl::translateNop},
 
 		// pseudo instructions
-		{X86_INS_CMPSS, nullptr},
+		{X86_INS_CMPSS, &Capstone2LlvmIrTranslatorX86_impl::translateCmpss},
 		{X86_INS_CMPEQSS, nullptr},
 		{X86_INS_CMPLTSS, nullptr},
 		{X86_INS_CMPLESS, nullptr},
@@ -2373,7 +2373,7 @@ Capstone2LlvmIrTranslatorX86_impl::_i2fm =
 		{X86_INS_CMPNLESS, nullptr},
 		{X86_INS_CMPORDSS, nullptr},
 
-		{X86_INS_CMPSD, &Capstone2LlvmIrTranslatorX86_impl::translateCompareString},
+		{X86_INS_CMPSD, &Capstone2LlvmIrTranslatorX86_impl::translateCmpss},
 		{X86_INS_CMPEQSD, nullptr},
 		{X86_INS_CMPLTSD, nullptr},
 		{X86_INS_CMPLESD, nullptr},

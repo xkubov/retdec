@@ -276,6 +276,7 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateCli(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCmc(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCMovCc(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateCmpss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCmpxchg(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCmpxchg8b(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateCmpxchg16b(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
@@ -362,6 +363,7 @@ class Capstone2LlvmIrTranslatorX86_impl :
 		void translateStd(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateStoreString(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateSub(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
+		void translateSubss(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateXchg(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateXlatb(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
 		void translateXor(cs_insn* i, cs_x86* xi, llvm::IRBuilder<>& irb);
