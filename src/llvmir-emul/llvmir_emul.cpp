@@ -2048,7 +2048,7 @@ llvm::GenericValue getConstantValue(const llvm::Constant* C, llvm::Module* m)
 				// so pointer to its LLVM representation should be ok.
 				// But we probably should not need this in our semantics tests,
 				// so we want to know if it ever gets here (assert).
-				assert(false && "taking a pointer to global variable is not implemented");
+//				assert(false && "taking a pointer to global variable is not implemented");
 				Result = PTOGV(const_cast<GlobalVariable*>(GV));
 			}
 			else
