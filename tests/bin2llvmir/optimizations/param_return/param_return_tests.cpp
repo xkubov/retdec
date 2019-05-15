@@ -265,19 +265,21 @@ TEST_F(ParamReturnTests, x86PtrCallOnlyStackStoresAreUsed)
 	std::string exp = R"(
 		@eax = global i32 0
 		@r = global i32 0
+		
 		define i32 @fnc() {
 			%stack_-4 = alloca i32
 			%local = alloca i32
 			store i32 123, i32* %stack_-4
 			store i32 456, i32* %local
 			store i32 789, i32* @eax
-			%a = bitcast i32* @r to void()*
+			%a = bitcast i32* @r to void ()*
 			%1 = load i32, i32* %stack_-4
-			%2 = bitcast void ()* %a to void (i32)*
-			call void %2(i32 %1)
-			%3 = load i32, i32* @eax
-			ret i32 %3
+			%2 = bitcast void ()* %a to i32 (i32)*
+			%3 = call i32 %2(i32 %1)
+			%4 = load i32, i32* @eax
+			ret i32 %4
 		}
+		
 		declare void @0()
 	)";
 	checkModuleAgainstExpectedIr(exp);
@@ -914,24 +916,24 @@ TEST_F(ParamReturnTests, x86_64PtrCallBasicFunctionality)
 
 	std::string exp = R"(
 		target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
-
+		
 		@r = global i64 0
 		@rdi = global i64 0
 		@rsi = global i64 0
 		@rax = global i64 0
-
+		
 		define i64 @fnc() {
 			store i64 123, i64* @rdi
 			store i64 456, i64* @rsi
-			%a = bitcast i64* @r to void()*
+			%a = bitcast i64* @r to void ()*
 			%1 = load i64, i64* @rdi
 			%2 = load i64, i64* @rsi
-			%3 = bitcast void ()* %a to void (i64, i64)*
-			call void %3(i64 %1, i64 %2)
-			%4 = load i64, i64* @rax
-			ret i64 %4
+			%3 = bitcast void ()* %a to i64 (i64, i64)*
+			%4 = call i64 %3(i64 %1, i64 %2)
+			%5 = load i64, i64* @rax
+			ret i64 %5
 		}
-
+		
 		declare void @0()
 	)";
 	checkModuleAgainstExpectedIr(exp);
@@ -995,10 +997,10 @@ TEST_F(ParamReturnTests, x86_64PtrCallPrevBbIsUsedOnlyIfItIsASinglePredecessor)
 			%a = bitcast i64* @r to void ()*
 			%1 = load i64, i64* @rdi
 			%2 = load i64, i64* @rsi
-			%3 = bitcast void ()* %a to void (i64, i64)*
-			call void %3(i64 %1, i64 %2)
-			%4 = load i64, i64* @rax
-			ret i64 %4
+			%3 = bitcast void ()* %a to i64 (i64, i64)*
+			%4 = call i64 %3(i64 %1, i64 %2)
+			%5 = load i64, i64* @rax
+			ret i64 %5
 		}
 
 		declare void @0()
@@ -1147,8 +1149,8 @@ TEST_F(ParamReturnTests, x86_64ExternalCallUsesFPRegistersBasic)
 	auto abi = AbiProvider::addAbi(module.get(), &config);
 
 	abi->addRegister(X86_REG_RAX, getGlobalByName("rax"));
-	abi->addRegister(X86_REG_XMM0, getGlobalByName("xmm0"));
-	abi->addRegister(X86_REG_XMM1, getGlobalByName("xmm1"));
+	abi->addRegister(X86_REG_XMMD0_1, getGlobalByName("xmm0"));
+	abi->addRegister(X86_REG_XMMD1_1, getGlobalByName("xmm1"));
 
 	pass.runOnModuleCustom(*module, &config, abi);
 
@@ -1229,8 +1231,8 @@ TEST_F(ParamReturnTests, x86_64ExternalCallUsesFPRegisters)
 	abi->addRegister(X86_REG_R8, getGlobalByName("r8"));
 	abi->addRegister(X86_REG_R9, getGlobalByName("r9"));
 	abi->addRegister(X86_REG_R10, getGlobalByName("r10"));
-	abi->addRegister(X86_REG_XMM0, getGlobalByName("xmm0"));
-	abi->addRegister(X86_REG_XMM1, getGlobalByName("xmm1"));
+	abi->addRegister(X86_REG_XMMD0_1, getGlobalByName("xmm0"));
+	abi->addRegister(X86_REG_XMMD1_1, getGlobalByName("xmm1"));
 
 	pass.runOnModuleCustom(*module, &config, abi);
 
@@ -1387,24 +1389,24 @@ TEST_F(ParamReturnTests, ms_x64PtrCallBasicFunctionality)
 
 	std::string exp = R"(
 		target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
-
+		
 		@r = global i64 0
 		@rcx = global i64 0
 		@rdx = global i64 0
 		@rax = global i64 0
-
+		
 		define i64 @fnc() {
 			store i64 123, i64* @rcx
 			store i64 456, i64* @rdx
-			%a = bitcast i64* @r to void()*
+			%a = bitcast i64* @r to void ()*
 			%1 = load i64, i64* @rcx
 			%2 = load i64, i64* @rdx
-			%3 = bitcast void ()* %a to void (i64, i64)*
-			call void %3(i64 %1, i64 %2)
-			%4 = load i64, i64* @rax
-			ret i64 %4
+			%3 = bitcast void ()* %a to i64 (i64, i64)*
+			%4 = call i64 %3(i64 %1, i64 %2)
+			%5 = load i64, i64* @rax
+			ret i64 %5
 		}
-
+		
 		declare void @0()
 	)";
 	checkModuleAgainstExpectedIr(exp);
@@ -1473,10 +1475,10 @@ TEST_F(ParamReturnTests, ms_x64PtrCallPrevBbIsUsedOnlyIfItIsASinglePredecessor)
 			%a = bitcast i64* @r to void ()*
 			%1 = load i64, i64* @rcx
 			%2 = load i64, i64* @rdx
-			%3 = bitcast void ()* %a to void (i64, i64)*
-			call void %3(i64 %1, i64 %2)
-			%4 = load i64, i64* @rax
-			ret i64 %4
+			%3 = bitcast void ()* %a to i64 (i64, i64)*
+			%4 = call i64 %3(i64 %1, i64 %2)
+			%5 = load i64, i64* @rax
+			ret i64 %5
 		}
 
 		declare void @0()
@@ -1903,10 +1905,10 @@ TEST_F(ParamReturnTests, ppcPtrCallBasicFunctionality)
 			%a = bitcast i32* @r to void ()*
 			%1 = load i32, i32* @r3
 			%2 = load i32, i32* @r4
-			%3 = bitcast void ()* %a to void (i32, i32)*
-			call void %3(i32 %1, i32 %2)
-			%4 = load i32, i32* @r3
-			ret i32 %4
+			%3 = bitcast void ()* %a to i32 (i32, i32)*
+			%4 = call i32 %3(i32 %1, i32 %2)
+			%5 = load i32, i32* @r3
+			ret i32 %5
 		}
 
 		declare void @0()
@@ -2346,10 +2348,10 @@ TEST_F(ParamReturnTests, ppc64PtrCallBasicFunctionality)
 			%a = bitcast i64* @r to void ()*
 			%1 = load i64, i64* @r3
 			%2 = load i64, i64* @r4
-			%3 = bitcast void ()* %a to void (i64, i64)*
-			call void %3(i64 %1, i64 %2)
-			%4 = load i64, i64* @r3
-			ret i64 %4
+			%3 = bitcast void ()* %a to i64 (i64, i64)*
+			%4 = call i64 %3(i64 %1, i64 %2)
+			%5 = load i64, i64* @r3
+			ret i64 %5
 		}
 
 		declare void @0()
@@ -2421,10 +2423,10 @@ TEST_F(ParamReturnTests, armPtrCallBasicFunctionality)
 			%a = bitcast i32* @r to void ()*
 			%1 = load i32, i32* @r0
 			%2 = load i32, i32* @r1
-			%3 = bitcast void ()* %a to void (i32, i32)*
-			call void %3(i32 %1, i32 %2)
-			%4 = load i32, i32* @r0
-			ret i32 %4
+			%3 = bitcast void ()* %a to i32 (i32, i32)*
+			%4 = call i32 %3(i32 %1, i32 %2)
+			%5 = load i32, i32* @r0
+			ret i32 %5
 		}
 
 		declare void @0()
@@ -2620,10 +2622,10 @@ TEST_F(ParamReturnTests, arm64PtrCallBasicFunctionality)
 			%a = bitcast i64* @r to void ()*
 			%1 = load i64, i64* @x0
 			%2 = load i64, i64* @x1
-			%3 = bitcast void ()* %a to void (i64, i64)*
-			call void %3(i64 %1, i64 %2)
-			%4 = load i64, i64* @x0
-			ret i64 %4
+			%3 = bitcast void ()* %a to i64 (i64, i64)*
+			%4 = call i64 %3(i64 %1, i64 %2)
+			%5 = load i64, i64* @x0
+			ret i64 %5
 		}
 
 		declare void @0()
@@ -3841,27 +3843,27 @@ TEST_F(ParamReturnTests, x86WatcomBasic)
 		@r = global i32 0
 
 		define i32 @fnc() {
-			%stack_-4 = alloca i32
-			%stack_-8 = alloca i32
-			store i32 1, i32* @eax
-			store i32 1, i32* @ebx
-			store i32 1, i32* @ecx
-			store i32 1, i32* @edx
-			store i32 123, i32* %stack_-4
-			store i32 456, i32* %stack_-8
-			%a = bitcast i32* @r to void()*
-			%1 = load i32, i32* @eax
-			%2 = load i32, i32* @edx
-			%3 = load i32, i32* @ebx
-			%4 = load i32, i32* @ecx
-			%5 = load i32, i32* %stack_-8
-			%6 = load i32, i32* %stack_-4
-			%7 = bitcast void ()* %a to void (i32, i32, i32, i32, i32, i32)*
-			call void %7(i32 %1, i32 %2, i32 %3, i32 %4, i32 %5, i32 %6)
-			%8 = load i32, i32* @eax
-			ret i32 %8
+		  %stack_-4 = alloca i32
+		  %stack_-8 = alloca i32
+		  store i32 1, i32* @eax
+		  store i32 1, i32* @ebx
+		  store i32 1, i32* @ecx
+		  store i32 1, i32* @edx
+		  store i32 123, i32* %stack_-4
+		  store i32 456, i32* %stack_-8
+		  %a = bitcast i32* @r to void ()*
+		  %1 = load i32, i32* @eax
+		  %2 = load i32, i32* @edx
+		  %3 = load i32, i32* @ebx
+		  %4 = load i32, i32* @ecx
+		  %5 = load i32, i32* %stack_-8
+		  %6 = load i32, i32* %stack_-4
+		  %7 = bitcast void ()* %a to i32 (i32, i32, i32, i32, i32, i32)*
+		  %8 = call i32 %7(i32 %1, i32 %2, i32 %3, i32 %4, i32 %5, i32 %6)
+		  %9 = load i32, i32* @eax
+		  ret i32 %9
 		}
-
+		
 		declare void @0()
 	)";
 	checkModuleAgainstExpectedIr(exp);
@@ -3930,17 +3932,17 @@ TEST_F(ParamReturnTests, x86WatcomPassDouble)
 			store i32 1, i32* @edx
 			store i32 456, i32* %stack_-8
 			store i32 123, i32* %stack_-4
-			%a = bitcast i32* @r to void()*
+			%a = bitcast i32* @r to void ()*
 			%1 = load i32, i32* @eax
 			%2 = load i32, i32* @edx
 			%3 = load i32, i32* %stack_-8
 			%4 = load i32, i32* %stack_-4
-			%5 = bitcast void ()* %a to void (i32, i32, i32, i32)*
-			call void %5(i32 %1, i32 %2, i32 %3, i32 %4)
-			%6 = load i32, i32* @eax
-			ret i32 %6
+			%5 = bitcast void ()* %a to i32 (i32, i32, i32, i32)*
+			%6 = call i32 %5(i32 %1, i32 %2, i32 %3, i32 %4)
+			%7 = load i32, i32* @eax
+			ret i32 %7
 		}
-
+		
 		declare void @0()
 	)";
 	checkModuleAgainstExpectedIr(exp);
