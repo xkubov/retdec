@@ -659,7 +659,7 @@ size_t Filter::fetchRegsForType(
 
 size_t Filter::getNumberOfStacksForType(Type* type) const
 {
-	auto maxBytesPerParam = _cc->getMaxBytesPerStackParam();
+	auto maxBytesPerParam = _cc->getMaxBytesForStackType(type);
 
 	if (maxBytesPerParam == 0)
 	{
