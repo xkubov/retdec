@@ -20,17 +20,17 @@ MicrosoftX64CallingConvention::MicrosoftX64CallingConvention(const Abi* a) :
 		X86_REG_R9
 	};
 	_paramFPRegs = {
-		X86_REG_XMM0,
-		X86_REG_XMM1,
-		X86_REG_XMM2,
-		X86_REG_XMM3
+		X86_REG_XMMD0_1,
+		X86_REG_XMMD1_1,
+		X86_REG_XMMD2_1,
+		X86_REG_XMMD3_1
 	};
 
 	_returnRegs = {
 		X86_REG_RAX
 	};
 	_returnFPRegs = {
-		X86_REG_XMM0
+		X86_REG_XMMD0_1
 	};
 
 	_largeObjectsPassedByReference = true;
