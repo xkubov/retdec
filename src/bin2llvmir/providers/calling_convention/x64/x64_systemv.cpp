@@ -42,14 +42,14 @@ SystemVX64CallingConvention::SystemVX64CallingConvention(const Abi* a) :
 		X86_REG_XMMD7_1
 	};
 	_paramVectorRegs = {
-//		X86_REG_XMM0,
-//		X86_REG_XMM1,
-//		X86_REG_XMM2,
-//		X86_REG_XMM3,
-//		X86_REG_XMM4,
-//		X86_REG_XMM5,
-//		X86_REG_XMM6,
-//		X86_REG_XMM7
+		X86_REG_XMM0,
+		X86_REG_XMM1,
+		X86_REG_XMM2,
+		X86_REG_XMM3,
+		X86_REG_XMM4,
+		X86_REG_XMM5,
+		X86_REG_XMM6,
+		X86_REG_XMM7
 	};
 
 	_returnRegs = {
@@ -62,10 +62,11 @@ SystemVX64CallingConvention::SystemVX64CallingConvention(const Abi* a) :
 	};
 	_returnDoubleRegs = {
 		X86_REG_XMMD0_1,
+		X86_REG_XMMD1_1
 	};
 	_returnVectorRegs = {
-//		X86_REG_XMM0,
-//		X86_REG_XMM1
+		X86_REG_XMM0,
+		X86_REG_XMM1
 	};
 
 	_largeObjectsPassedByReference = true;
