@@ -321,7 +321,7 @@ void Filter::filterDefinitionArgs(FilterableLayout& args, bool isVoidarg) const
 	}
 	else
 	{
-		createContinuousArgRegisters(args);
+		leaveOnlyContinuousArgRegisters(args);
 	}
 
 	leaveOnlyContinuousStack(args);
