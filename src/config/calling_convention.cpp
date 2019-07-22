@@ -166,5 +166,10 @@ std::ostream& operator<<(std::ostream &out, const CallingConvention& cc)
 	return out;
 }
 
+CallingConventionID CallingConvention::operator=(const CallingConventionID& cc)
+{
+	return _callingConvention = cc;
+}
+
 } // namespace config
 } // namespace retdec
