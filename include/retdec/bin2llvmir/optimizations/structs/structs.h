@@ -1,5 +1,5 @@
 /**
-* @file include/retdec/bin2llvmir/optimizations/struct/struct.h
+* @file include/retdec/bin2llvmir/optimizations/strucst/structs.h
 * @brief Reconstruct struct.
 * @copyright (c) 2017 Avast Software, licensed under the MIT license
 */
@@ -10,7 +10,6 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 
-#include "retdec/bin2llvmir/analyses/symbolic_tree.h"
 #include "retdec/bin2llvmir/providers/abi/abi.h"
 #include "retdec/bin2llvmir/providers/config.h"
 #include "retdec/bin2llvmir/providers/debugformat.h"
@@ -32,6 +31,16 @@ class StructsAnalysis : public llvm::ModulePass
 
 	private:
 		bool run();
+	
+		llvm::StructType* getStructType(const llvm::Value* var) const;
+		bool holdsStructureType(const llvm::Value* var) const;
+
+		llvm::GlobalVariable* correctUsageOfGlobalStructure(llvm::GlobalVariable& gv); 
+
+		llvm::Instruction* getElement(llvm::Value* v, std::size_t idx) const;
+		llvm::GlobalVariable* createCopy(llvm::GlobalVariable* gv);
+
+		std::size_t getAlignment(llvm::StructType* st) const;
 
 	private:
 		llvm::Module* _module = nullptr;
