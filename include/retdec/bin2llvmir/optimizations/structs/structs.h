@@ -35,12 +35,15 @@ class StructsAnalysis : public llvm::ModulePass
 		llvm::StructType* getStructType(const llvm::Value* var) const;
 		bool holdsStructureType(const llvm::Value* var) const;
 
-		llvm::GlobalVariable* correctUsageOfGlobalStructure(llvm::GlobalVariable& gv); 
+		llvm::GlobalVariable* correctUsageOfGlobalStructure(llvm::GlobalVariable* gv, retdec::utils::Address& addr, size_t structLevel = 0); 
 
 		llvm::Instruction* getElement(llvm::Value* v, std::size_t idx) const;
+		llvm::Instruction* getElement(llvm::Value* v, const std::vector<llvm::Value*>& idxs) const;
 		llvm::GlobalVariable* createCopy(llvm::GlobalVariable* gv);
 
 		std::size_t getAlignment(llvm::StructType* st) const;
+
+		void replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx);
 
 	private:
 		llvm::Module* _module = nullptr;

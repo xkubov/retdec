@@ -98,6 +98,11 @@ Instruction* StructsAnalysis::getElement(llvm::Value* v, std::size_t idx) const
 	return GetElementPtrInst::CreateInBounds(getStructType(v), v, {zero, eIdx});
 }
 
+Instruction* StructsAnalysis::getElement(llvm::Value* v, const std::vector<Value*> &idxs) const
+{
+	return GetElementPtrInst::CreateInBounds(getStructType(v), v, idxs);
+}
+
 std::size_t StructsAnalysis::getAlignment(StructType* st) const
 {
 	std::size_t alignment = 0;
@@ -123,76 +128,114 @@ std::size_t StructsAnalysis::getAlignment(StructType* st) const
 	return alignment;
 }
 
-llvm::GlobalVariable* StructsAnalysis::correctUsageOfGlobalStructure(GlobalVariable& gl)
+/**
+ * Expects element to have same type as element at idx in str.
+ */
+void StructsAnalysis::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx)
 {
-	if (!holdsStructureType(&gl))
-		return &gl;
+	auto elementType = dyn_cast<PointerType>(element->getType())->getElementType();
+	std::vector<User*> uses;
+	for (auto* u: element->users())
+	{
+		uses.push_back(u);
+	}
 
-	auto addr = _config->getGlobalAddress(&gl);
-	auto defAlign = getAlignment(getStructType(&gl));
+	for (auto u: uses) {
+		if (auto* ld = dyn_cast<LoadInst>(u))
+		{
+			auto elemVal = getElement(str, idx);
+			elemVal->insertBefore(ld);
+			auto load = new LoadInst(elementType, elemVal, "", ld);
+			ld->replaceAllUsesWith(load);
+			ld->eraseFromParent();
+		}
+		else if (auto* st = dyn_cast<StoreInst>(u))
+		{
+			auto elemVal = getElement(str, idx);
+			elemVal->insertBefore(st);
+			new StoreInst(st->getValueOperand(), elemVal, st);
+			st->eraseFromParent();
+		}
+		else if (auto* ep = dyn_cast<GetElementPtrInst>(u))
+		{
+			auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
+			auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+			std::vector<Value*> idxs = {zero, eIdx};
+			bool isFirst = true;
+			for (auto& i : ep->indices())
+			{
+				if (!isFirst)
+					idxs.push_back(i.get());
+				else
+					isFirst = false;
+			}
+
+			auto elem = getElement(str, idxs);
+			elem->insertBefore(ep);
+			ep->replaceAllUsesWith(elem);
+			ep->eraseFromParent();
+		}
+	}
+
+}
+
+llvm::GlobalVariable* StructsAnalysis::correctUsageOfGlobalStructure(GlobalVariable* gl, retdec::utils::Address& addr, size_t structLevel)
+{
+	if (!holdsStructureType(gl))
+		return gl;
+
+	auto defAlign = getAlignment(getStructType(gl));
 	auto alignment = defAlign;
 
-	auto newStructure = createCopy(&gl);
+	auto origAddr = addr;
+
+	auto newStructure = createCopy(gl);
 	auto irm = IrModifier(_module, _config);
 	auto image = FileImageProvider::getFileImage(_module);
 
-	auto add = addr;
-	
 	std::size_t idx = 0;
 
 	for (auto elem: getStructType(newStructure)->elements())
 	{
-		auto elemSize = _abi->getTypeByteSize(elem);
-		if (auto* st = dyn_cast<StructType>(elem))
+		if (auto*elemStr = dyn_cast<StructType>(elem))
 		{
-			elemSize = _abi->getTypeByteSize(*st->element_begin());
-		}
+			auto na = getAlignment(elemStr);
+			if (defAlign > alignment)
+				addr += (alignment)%na;
 
-		LOG << std::dec;
-		LOG << "alignment: " << alignment << std::endl;
-		LOG << "elem size: " << elemSize << std::endl;
-		LOG << "addr: " << std::hex << add << std::endl;	
-
-		if (alignment < elemSize) {
-			add += alignment;
-			LOG << "inced addr: " << std::hex << add << std::endl;	
 			alignment = defAlign;
-		}
-		alignment -= elemSize;
-		
-		LOG << "Has struct " << isa<StructType>(elem) << std::endl;
-		LOG << "elem addr: " << std::hex << add << std::endl;	
+			auto structElement = _config->getLlvmGlobalVariable(addr);
+			structElement = dyn_cast<GlobalVariable>(irm.changeObjectType(image, structElement, elem));
+			auto oldAddr = addr;
+				structElement = correctUsageOfGlobalStructure(structElement, addr, structLevel+1);
+				addr += (addr-oldAddr)%na; // another solution would be to do this on the end as: addr+=alignment;
+				replaceElementWithStrIdx(structElement, newStructure, idx++);
 
-		auto structElement = _config->getLlvmGlobalVariable(add);
-		structElement = dyn_cast<GlobalVariable>(irm.changeObjectType(image, structElement, elem));
-
-		if (isa<StructType>(elem))
-			structElement = correctUsageOfGlobalStructure(*structElement);
-
-		for (auto* u: structElement->users()) {
-			if (auto* ld = dyn_cast<LoadInst>(u))
-			{
-				auto elemVal = getElement(newStructure, idx);
-				elemVal->insertBefore(ld);
-				auto load = new LoadInst(elem, elemVal, "", ld);
-				ld->replaceAllUsesWith(load);
-				ld->eraseFromParent();
+				continue;
 			}
-			else if (auto* st = dyn_cast<StoreInst>(u))
-			{
-				auto elemVal = getElement(newStructure, idx);
-				elemVal->insertBefore(st);
-				new StoreInst(st->getValueOperand(), elemVal, st);
-				//store->insertAfter(st);
-				st->eraseFromParent();
-			}
-		}
+			
+			auto elemSize = _abi->getTypeByteSize(elem);
+			if (alignment < elemSize) {
 
-		add += elemSize;
-		idx++;
+				addr += alignment;
+				alignment = defAlign;
+			}
+			
+			auto structElement = _config->getLlvmGlobalVariable(addr);
+			structElement = dyn_cast<GlobalVariable>(irm.changeObjectType(image, structElement, elem));
+			for (size_t i = 0; i < structLevel; i++)
+			{
+				LOG << "\t";
+			}
+			LOG << addr << " " << llvmObjToString(dyn_cast<PointerType>(structElement->getType())->getElementType()) << std::endl;
+
+			replaceElementWithStrIdx(structElement, newStructure, idx++);
+
+			alignment -= elemSize;
+			addr += elemSize;
 	}
 
-	auto origStr = _config->getLlvmGlobalVariable(addr);
+	auto origStr = _config->getLlvmGlobalVariable(origAddr);
 	newStructure->takeName(origStr);
 
 	return newStructure;
@@ -211,17 +254,18 @@ bool StructsAnalysis::run()
 		if (!_config->isGlobalVariable(g)) {
 			continue;
 		}
-
-		correctUsageOfGlobalStructure(*g);
+	
+		auto addr = _config->getGlobalAddress(g);
+		correctUsageOfGlobalStructure(g, addr);
 	}
 	
-	for (auto& f: _module->functions()) {
-		for (auto& b: f) {
-			for (auto& i: b) {
-				//exit(4);
-			}
-		}
-	}
+//	for (auto& f: _module->functions()) {
+//		for (auto& b: f) {
+//			for (auto& i: b) {
+//				//exit(4);
+//			}
+//		}
+//	}
 
 	return false;
 }
