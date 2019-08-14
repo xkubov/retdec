@@ -63,7 +63,6 @@ set(BIN2LLVMIR_SOURCES
 	optimizations/select_functions/select_functions.cpp
 	optimizations/simple_types/simple_types.cpp
 	optimizations/stack/stack.cpp
-	optimizations/structs/structs.cpp
 	optimizations/stack_pointer_ops/stack_pointer_ops.cpp
 	optimizations/value_protect/value_protect.cpp
 	optimizations/syscalls/arm.cpp
