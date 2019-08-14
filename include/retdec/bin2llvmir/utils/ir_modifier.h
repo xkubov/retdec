@@ -58,7 +58,7 @@ class IrModifier
 				llvm::ArrayRef<llvm::Value*> args);
 
 	public:
-		IrModifier(llvm::Module* m, Config* c, Abi* a);
+		IrModifier(llvm::Module* m, Config* c);
 
 	// Methods using member data -> need instance of this class.
 	//
@@ -125,7 +125,6 @@ class IrModifier
 	protected:
 		llvm::Module* _module = nullptr;
 		Config* _config = nullptr;
-		Abi* _abi = nullptr;
 };
 
 template<typename Container>

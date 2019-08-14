@@ -489,10 +489,9 @@ namespace bin2llvmir {
 //==============================================================================
 //
 
-IrModifier::IrModifier(llvm::Module* m, Config* c, Abi* a) :
+IrModifier::IrModifier(llvm::Module* m, Config* c) :
 		_module(m),
-		_config(c),
-		_abi(a)
+		_config(c)
 {
 
 }
@@ -700,6 +699,7 @@ GlobalVariable* IrModifier::getGlobalVariable(
 
 std::size_t IrModifier::getAlignment(StructType* st) const
 {
+	auto a = AbiProvider::getAbi(_module);
 	std::size_t alignment = 0;
 	for (auto e: st->elements())
 	{
@@ -709,7 +709,7 @@ std::size_t IrModifier::getAlignment(StructType* st) const
 			eSize = getAlignment(st);
 
 		else
-			eSize = _abi->getTypeByteSize(e);
+			eSize = a->getTypeByteSize(e);
 
 		//TODO: did we tought through arrays?
 		
@@ -717,8 +717,8 @@ std::size_t IrModifier::getAlignment(StructType* st) const
 			alignment = eSize;
 	}
 
-	if (alignment > _abi->getWordSize())
-		alignment = _abi->getWordSize();
+	if (alignment > a->getWordSize())
+		alignment = a->getWordSize();
 
 	return alignment;
 }
@@ -824,7 +824,8 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			continue;
 		}
 
-		auto elemSize = _abi->getTypeByteSize(elem);
+		auto a = AbiProvider::getAbi(_module);
+		auto elemSize = a->getTypeByteSize(elem);
 		if (padding < elemSize) {
 
 			addr += padding;
