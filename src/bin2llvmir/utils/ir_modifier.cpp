@@ -489,9 +489,10 @@ namespace bin2llvmir {
 //==============================================================================
 //
 
-IrModifier::IrModifier(llvm::Module* m, Config* c) :
+IrModifier::IrModifier(llvm::Module* m, Config* c, Abi* a) :
 		_module(m),
-		_config(c)
+		_config(c),
+		_abi(a)
 {
 
 }
@@ -697,6 +698,156 @@ GlobalVariable* IrModifier::getGlobalVariable(
 	return gv;
 }
 
+std::size_t IrModifier::getAlignment(StructType* st) const
+{
+	std::size_t alignment = 0;
+	for (auto e: st->elements())
+	{
+		std::size_t eSize = 0;
+
+		if (auto* st = dyn_cast<StructType>(e))
+			eSize = getAlignment(st);
+
+		else
+			eSize = _abi->getTypeByteSize(e);
+
+		//TODO: did we tought through arrays?
+		
+		if (eSize > alignment)
+			alignment = eSize;
+	}
+
+	if (alignment > _abi->getWordSize())
+		alignment = _abi->getWordSize();
+
+	return alignment;
+}
+
+Instruction* IrModifier::getElement(llvm::Value* v, std::size_t idx) const
+{
+	assert(isa<StructType>(v->getType()));
+	auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
+	auto eIdx= ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+
+	return GetElementPtrInst::CreateInBounds(v->getType(), v, {zero, eIdx});
+}
+
+Instruction* IrModifier::getElement(llvm::Value* v, const std::vector<Value*> &idxs) const
+{
+	assert(isa<StructType>(v->getType()));
+	return GetElementPtrInst::CreateInBounds(v->getType(), v, idxs);
+}
+
+void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx)
+{
+	auto elementType = dyn_cast<PointerType>(element->getType())->getElementType();
+	std::vector<User*> uses;
+	for (auto* u: element->users())
+	{
+		uses.push_back(u);
+	}
+
+	for (auto u: uses) {
+		if (auto* ld = dyn_cast<LoadInst>(u))
+		{
+			auto elemVal = getElement(str, idx);
+			elemVal->insertBefore(ld);
+			auto load = new LoadInst(elementType, elemVal, "", ld);
+			ld->replaceAllUsesWith(load);
+			ld->eraseFromParent();
+		}
+		else if (auto* st = dyn_cast<StoreInst>(u))
+		{
+			auto elemVal = getElement(str, idx);
+			elemVal->insertBefore(st);
+			new StoreInst(st->getValueOperand(), elemVal, st);
+			st->eraseFromParent();
+		}
+		else if (auto* ep = dyn_cast<GetElementPtrInst>(u))
+		{
+			auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
+			auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+			std::vector<Value*> idxs = {zero, eIdx};
+			bool isFirst = true;
+			for (auto& i : ep->indices())
+			{
+				if (!isFirst)
+					idxs.push_back(i.get());
+				else
+					isFirst = false;
+			}
+
+			auto elem = getElement(str, idxs);
+			elem->insertBefore(ep);
+			ep->replaceAllUsesWith(elem);
+			ep->eraseFromParent();
+		}
+	}
+
+}
+
+llvm::GlobalVariable* IrModifier::convertToStructure(
+		GlobalVariable* gv,
+		StructType* strType,
+		retdec::utils::Address& addr)
+{
+	std::cout << "This really works" << std::endl;
+	auto alignment = getAlignment(strType);
+	auto padding = alignment;
+	auto origAddr = addr;
+
+	auto cgv = new GlobalVariable(
+			*_module,
+			strType,
+			gv->isConstant(),
+			gv->getLinkage(),
+			gv->getInitializer());
+
+	std::size_t idx = 0;
+	for (auto elem: strType->elements())
+	{
+		if (auto* eStrType = dyn_cast<StructType>(elem))
+		{
+			auto newAlignment = getAlignment(eStrType);
+			if (alignment > padding)
+				addr += (padding)%newAlignment;
+
+			padding = alignment;
+			GlobalVariable* structElement = _config->getLlvmGlobalVariable(addr);
+			retdec::utils::Address oldAddr = addr;
+			
+			structElement = convertToStructure(structElement, eStrType, addr);
+			addr += (addr-oldAddr)%newAlignment; // another solution would be to do this on the end as: addr+=padding;
+			
+			replaceElementWithStrIdx(structElement, cgv, idx++);
+
+			continue;
+		}
+
+		auto elemSize = _abi->getTypeByteSize(elem);
+		if (padding < elemSize) {
+
+			addr += padding;
+			padding = alignment;
+		}
+
+		auto structElement = _config->getLlvmGlobalVariable(addr);
+		auto image = FileImageProvider::getFileImage(_module);
+		structElement = dyn_cast<GlobalVariable>(changeObjectType(image, structElement, elem));
+
+		replaceElementWithStrIdx(structElement, cgv, idx++);
+
+		padding -= elemSize;
+		addr += elemSize;
+	}
+
+	// During computation will be original global variable changed.
+	auto origStr = _config->getLlvmGlobalVariable(origAddr);
+	cgv->takeName(origStr);
+
+	return cgv;
+}
+
 /**
  * Change @c val declaration to @c toType. Only the object type is changed,
  * not its usages. Because of this, it is not safe to use this function alone.
@@ -741,15 +892,23 @@ llvm::Value* IrModifier::changeObjectDeclarationType(
 					wideString);
 		}
 
-		auto* old = ogv;
-		ogv = new GlobalVariable(
-				*_module,
-				init ? init->getType() : toType,
-				old->isConstant(),
-				old->getLinkage(),
-				init,
-				old->getName());
-		ogv->takeName(old);
+		if (auto* strType = dyn_cast<StructType>(init ? init->getType() : toType))
+		{
+			auto addr = _config->getGlobalAddress(ogv);
+			convertToStructure(ogv, strType, addr);
+		}
+		else
+		{
+			auto* old = ogv;
+			ogv = new GlobalVariable(
+					*_module,
+					init ? init->getType() : toType,
+					old->isConstant(),
+					old->getLinkage(),
+					init,
+					old->getName());
+			ogv->takeName(old);
+		}
 
 		auto* ecgv = _config->getConfigGlobalVariable(ogv);
 		if (ecgv)

@@ -58,7 +58,7 @@ class IrModifier
 				llvm::ArrayRef<llvm::Value*> args);
 
 	public:
-		IrModifier(llvm::Module* m, Config* c);
+		IrModifier(llvm::Module* m, Config* c, Abi* a);
 
 	// Methods using member data -> need instance of this class.
 	//
@@ -114,10 +114,18 @@ class IrModifier
 				llvm::Type* toType,
 				llvm::Constant* init = nullptr,
 				bool wideString = false);
+	
+	protected:
+		void replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx);
+		llvm::GlobalVariable* convertToStructure(llvm::GlobalVariable* gv, llvm::StructType* strType, retdec::utils::Address& addr);
+		std::size_t getAlignment(llvm::StructType* st) const;
+		llvm::Instruction* getElement(llvm::Value* v, std::size_t idx) const;
+		llvm::Instruction* getElement(llvm::Value* v, const std::vector<llvm::Value*>& idxs) const;
 
 	protected:
 		llvm::Module* _module = nullptr;
 		Config* _config = nullptr;
+		Abi* _abi = nullptr;
 };
 
 template<typename Container>
