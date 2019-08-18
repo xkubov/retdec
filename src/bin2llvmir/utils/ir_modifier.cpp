@@ -694,6 +694,11 @@ GlobalVariable* IrModifier::getGlobalVariable(
 			realName,
 			cryptoDesc);
 
+	if (auto* strt = dyn_cast<StructType>(dyn_cast<PointerType>(gv->getType())->getElementType()))
+	{
+		return convertToStructure(gv, strt, addr);
+	}
+
 	return gv;
 }
 
@@ -783,7 +788,6 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 			ep->eraseFromParent();
 		}
 	}
-
 }
 
 llvm::GlobalVariable* IrModifier::convertToStructure(
@@ -801,7 +805,10 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			strType,
 			gv->isConstant(),
 			gv->getLinkage(),
-			gv->getInitializer());
+			gv->getInitializer()); // Global structures fuck.
+
+	auto image = FileImageProvider::getFileImage(_module);
+	auto dbgf = DebugFormatProvider::getDebugFormat(_module);
 
 	std::size_t idx = 0;
 	for (auto elem: strType->elements())
@@ -813,12 +820,15 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 				addr += (padding)%newAlignment;
 
 			padding = alignment;
-			GlobalVariable* structElement = _config->getLlvmGlobalVariable(addr);
+			GlobalVariable* structElement = getGlobalVariable(image, dbgf, addr);
+			auto* origType = dyn_cast<PointerType>(structElement->getType())->getElementType();
 			retdec::utils::Address oldAddr = addr;
-			
+			auto* val = changeObjectDeclarationType(image, structElement, eStrType);
+			correctUsageOfModifiedObject(val, origType);
+
+			structElement = dyn_cast<GlobalVariable>(val);
 			structElement = convertToStructure(structElement, eStrType, addr);
 			addr += (addr-oldAddr)%newAlignment; // another solution would be to do this on the end as: addr+=padding;
-			
 			replaceElementWithStrIdx(structElement, cgv, idx++);
 
 			continue;
@@ -832,8 +842,8 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			padding = alignment;
 		}
 
-		auto structElement = _config->getLlvmGlobalVariable(addr);
-		auto image = FileImageProvider::getFileImage(_module);
+		auto structElement =  getGlobalVariable(image, dbgf, addr);
+		// We are sure that element won't be structure so it should be safe to call this method I guess.
 		structElement = dyn_cast<GlobalVariable>(changeObjectType(image, structElement, elem));
 
 		replaceElementWithStrIdx(structElement, cgv, idx++);
@@ -893,23 +903,15 @@ llvm::Value* IrModifier::changeObjectDeclarationType(
 					wideString);
 		}
 
-		if (auto* strType = dyn_cast<StructType>(init ? init->getType() : toType))
-		{
-			auto addr = _config->getGlobalAddress(ogv);
-			convertToStructure(ogv, strType, addr);
-		}
-		else
-		{
-			auto* old = ogv;
-			ogv = new GlobalVariable(
-					*_module,
-					init ? init->getType() : toType,
-					old->isConstant(),
-					old->getLinkage(),
-					init,
-					old->getName());
-			ogv->takeName(old);
-		}
+		auto* old = ogv;
+		ogv = new GlobalVariable(
+				*_module,
+				init ? init->getType() : toType,
+				old->isConstant(),
+				old->getLinkage(),
+				init,
+				old->getName());
+		ogv->takeName(old);
 
 		auto* ecgv = _config->getConfigGlobalVariable(ogv);
 		if (ecgv)
@@ -934,6 +936,143 @@ llvm::Value* IrModifier::changeObjectDeclarationType(
 		errs() << "unhandled value type : " << *val << "\n";
 		assert(false && "unhandled value type");
 		return val;
+	}
+}
+
+void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::unordered_set<llvm::Instruction*>* instToErase)
+{
+	Constant* newConst = dyn_cast<Constant>(val);
+
+	// For some reason, iteration using val->user_begin() and val->user_end()
+	// may break -- there are many uses, but after modifying one of them,
+	// iteration ends before visiting all of them. Even when we increment
+	// iterator before modification.
+	// Example: @glob_var_0 in arm-elf-059c1a6996c630386b5067c2ccc6ddf2
+	// Therefore, we store all uses to our own container.
+	//
+	std::list<User*> users;
+	for (const auto& U : val->users())
+	{
+		users.push_back(U);
+	}
+
+	for (auto* user : users)
+	{
+		Constant* c = dyn_cast<Constant>(user);
+		auto* gvDeclr = dyn_cast<GlobalVariable>(user);
+
+		if (auto* store = dyn_cast<StoreInst>(user))
+		{
+			Value* src = store->getValueOperand();
+			Value* dst = store->getPointerOperand();
+
+			if (val == dst)
+			{
+				PointerType* ptr = dyn_cast<PointerType>(val->getType());
+				assert(ptr);
+				auto* conv = IrModifier::convertValueToType(src, ptr->getElementType(), store);
+				store->setOperand(0, conv);
+				store->setOperand(1, val);
+			}
+			else
+			{
+				auto* conv = IrModifier::convertValueToType(val, origType, store);
+				store->setOperand(0, conv);
+			}
+		}
+		else if (auto* load = dyn_cast<LoadInst>(user))
+		{
+			assert(val == load->getPointerOperand());
+
+			auto* newLoad = new LoadInst(val);
+			newLoad->insertBefore(load);
+
+			// load->getType() stays unchanged even after loaded object's type is mutated.
+			// we can use it here as a target type, but the origianl load instruction can
+			// not be used afterwards, because its type is incorrect.
+			auto* conv = IrModifier::convertValueToType(newLoad, load->getType(), load);
+
+			if (conv != load)
+			{
+				load->replaceAllUsesWith(conv);
+				if (instToErase)
+				{
+					instToErase->insert(load);
+				}
+				else
+				{
+					load->eraseFromParent();
+				}
+			}
+		}
+		else if (auto* cast = dyn_cast<CastInst>(user))
+		{
+			if (val->getType() == cast->getType())
+			{
+				if (val != cast)
+				{
+					cast->replaceAllUsesWith(val);
+					if (instToErase)
+					{
+						instToErase->insert(cast);
+					}
+					else
+					{
+						cast->eraseFromParent();
+					}
+				}
+			}
+			else
+			{
+				auto* conv = IrModifier::convertValueToType(val, cast->getType(), cast);
+				if (cast != conv)
+				{
+					cast->replaceAllUsesWith(conv);
+					if (instToErase)
+					{
+						instToErase->insert(cast);
+					}
+					else
+					{
+						cast->eraseFromParent();
+					}
+				}
+			}
+		}
+		// maybe GetElementPtrInst should be specially handled?
+		else if (auto* instr = dyn_cast<Instruction>(user))
+		{
+			auto* conv = IrModifier::convertValueToType(val, origType, instr);
+			if (val != conv)
+			{
+				instr->replaceUsesOfWith(val, conv);
+			}
+		}
+		else if (newConst && gvDeclr)
+		{
+			auto* conv = IrModifier::convertConstantToType(
+					newConst,
+					gvDeclr->getType()->getPointerElementType());
+			if (gvDeclr != conv)
+			{
+				gvDeclr->replaceUsesOfWith(val, conv);
+			}
+		}
+		// Needs to be at the very end, many objects can be casted to Constant.
+		//
+		else if (newConst && c)
+		{
+			auto* conv = IrModifier::convertConstantToType(newConst, c->getType());
+			if (c != conv)
+			{
+				c->replaceAllUsesWith(conv);
+			}
+		}
+		else
+		{
+			errs() << "unhandled use : " << *user << " -> " << *val->getType() << "\n";
+			assert(false && "unhandled use");
+		}
 	}
 }
 
@@ -986,138 +1125,17 @@ llvm::Value* IrModifier::changeObjectType(
 			toType,
 			init,
 			wideString);
-	Constant* newConst = dyn_cast<Constant>(nval);
 
-	// For some reason, iteration using val->user_begin() and val->user_end()
-	// may break -- there are many uses, but after modifying one of them,
-	// iteration ends before visiting all of them. Even when we increment
-	// iterator before modification.
-	// Example: @glob_var_0 in arm-elf-059c1a6996c630386b5067c2ccc6ddf2
-	// Therefore, we store all uses to our own container.
-	//
-	std::list<User*> users;
-	for (const auto& U : val->users())
+	correctUsageOfModifiedObject(nval, origType, instToErase);
+
+	// If it is global structure we need to correct elements usage.
+	if (auto* strType = dyn_cast<StructType>(toType))
 	{
-		users.push_back(U);
-	}
+		if (auto* gv = dyn_cast<GlobalVariable>(nval)) {
+			auto addr = _config->getGlobalAddress(gv);
+			return convertToStructure(gv, strType, addr);
+		}
 
-	for (auto* user : users)
-	{
-		Constant* c = dyn_cast<Constant>(user);
-		auto* gvDeclr = dyn_cast<GlobalVariable>(user);
-
-		if (auto* store = dyn_cast<StoreInst>(user))
-		{
-			Value* src = store->getValueOperand();
-			Value* dst = store->getPointerOperand();
-
-			if (val == dst)
-			{
-				PointerType* ptr = dyn_cast<PointerType>(nval->getType());
-				assert(ptr);
-				auto* conv = IrModifier::convertValueToType(src, ptr->getElementType(), store);
-				store->setOperand(0, conv);
-				store->setOperand(1, nval);
-			}
-			else
-			{
-				auto* conv = IrModifier::convertValueToType(nval, origType, store);
-				store->setOperand(0, conv);
-			}
-		}
-		else if (auto* load = dyn_cast<LoadInst>(user))
-		{
-			assert(val == load->getPointerOperand());
-
-			auto* newLoad = new LoadInst(nval);
-			newLoad->insertBefore(load);
-
-			// load->getType() stays unchanged even after loaded object's type is mutated.
-			// we can use it here as a target type, but the origianl load instruction can
-			// not be used afterwards, because its type is incorrect.
-			auto* conv = IrModifier::convertValueToType(newLoad, load->getType(), load);
-
-			if (conv != load)
-			{
-				load->replaceAllUsesWith(conv);
-				if (instToErase)
-				{
-					instToErase->insert(load);
-				}
-				else
-				{
-					load->eraseFromParent();
-				}
-			}
-		}
-		else if (auto* cast = dyn_cast<CastInst>(user))
-		{
-			if (nval->getType() == cast->getType())
-			{
-				if (val != cast)
-				{
-					cast->replaceAllUsesWith(nval);
-					if (instToErase)
-					{
-						instToErase->insert(cast);
-					}
-					else
-					{
-						cast->eraseFromParent();
-					}
-				}
-			}
-			else
-			{
-				auto* conv = IrModifier::convertValueToType(nval, cast->getType(), cast);
-				if (cast != conv)
-				{
-					cast->replaceAllUsesWith(conv);
-					if (instToErase)
-					{
-						instToErase->insert(cast);
-					}
-					else
-					{
-						cast->eraseFromParent();
-					}
-				}
-			}
-		}
-		// maybe GetElementPtrInst should be specially handled?
-		else if (auto* instr = dyn_cast<Instruction>(user))
-		{
-			auto* conv = IrModifier::convertValueToType(nval, origType, instr);
-			if (val != conv)
-			{
-				instr->replaceUsesOfWith(val, conv);
-			}
-		}
-		else if (newConst && gvDeclr)
-		{
-			auto* conv = IrModifier::convertConstantToType(
-					newConst,
-					gvDeclr->getType()->getPointerElementType());
-			if (gvDeclr != conv)
-			{
-				gvDeclr->replaceUsesOfWith(val, conv);
-			}
-		}
-		// Needs to be at the very end, many objects can be casted to Constant.
-		//
-		else if (newConst && c)
-		{
-			auto* conv = IrModifier::convertConstantToType(newConst, c->getType());
-			if (c != conv)
-			{
-				c->replaceAllUsesWith(conv);
-			}
-		}
-		else
-		{
-			errs() << "unhandled use : " << *user << " -> " << *toType << "\n";
-			assert(false && "unhandled use");
-		}
 	}
 
 	return nval;

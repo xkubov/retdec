@@ -114,6 +114,11 @@ class IrModifier
 				llvm::Type* toType,
 				llvm::Constant* init = nullptr,
 				bool wideString = false);
+
+		void correctUsageOfModifiedObject(
+				llvm::Value* val,
+				llvm::Type* origType,
+				std::unordered_set<llvm::Instruction*>* instToErase = nullptr);
 	
 	protected:
 		void replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx);
