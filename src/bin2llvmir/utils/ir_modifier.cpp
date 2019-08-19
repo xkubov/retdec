@@ -730,23 +730,31 @@ std::size_t IrModifier::getAlignment(StructType* st) const
 
 Instruction* IrModifier::getElement(llvm::Value* v, std::size_t idx) const
 {
-	assert(isa<StructType>(v->getType()));
+	auto* var = dyn_cast<PointerType>(v->getType());
+	assert(var && "Expects variable.");
+	auto* strType = dyn_cast<StructType>(var->getElementType());
+
 	auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
 	auto eIdx= ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
 
-	return GetElementPtrInst::CreateInBounds(v->getType(), v, {zero, eIdx});
+	return GetElementPtrInst::CreateInBounds(strType, v, {zero, eIdx});
 }
 
 Instruction* IrModifier::getElement(llvm::Value* v, const std::vector<Value*> &idxs) const
 {
-	assert(isa<StructType>(v->getType()));
-	return GetElementPtrInst::CreateInBounds(v->getType(), v, idxs);
+	auto* var = dyn_cast<PointerType>(v->getType());
+	assert(var && "Expects variable.");
+	auto* strType = dyn_cast<StructType>(var->getElementType());
+
+	return GetElementPtrInst::CreateInBounds(strType, v, idxs);
 }
 
 void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx)
 {
 	auto elementType = dyn_cast<PointerType>(element->getType())->getElementType();
+	auto structType = dyn_cast<PointerType>(str->getType())->getElementType();
 	std::vector<User*> uses;
+
 	for (auto* u: element->users())
 	{
 		uses.push_back(u);
@@ -787,7 +795,42 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 			ep->replaceAllUsesWith(elem);
 			ep->eraseFromParent();
 		}
+		else
+		{
+			//LOG << "usage: " << llvmObjToString(u) << std::endl;
+		//	exit(1);
+		}
 	}
+		
+	auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
+	auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+	auto elem = ConstantExpr::getGetElementPtr(structType, dyn_cast<Constant>(str), ArrayRef<Constant*>{zero, eIdx});
+
+	element->replaceAllUsesWith(elem);
+
+	initializeGlobalWithGetElementPtr(element, str, idx);
+}
+
+void IrModifier::initializeGlobalWithGetElementPtr(
+		Value* element,
+		Value* str,
+		std::size_t idx)
+{
+	// 1. Create constant getelementptr getelementptr
+	// 2. Call changeObjectType with constant getelementpr
+
+	auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
+	auto eIdx= ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+	assert(isa<Constant>(str) && "Dealing with something that is not global");
+	ArrayRef<Constant*> af = {zero, eIdx};
+	auto* s = dyn_cast<PointerType>(str->getType())->getElementType();
+	auto* ce = ConstantExpr::getGetElementPtr(s, dyn_cast<Constant>(str), af);
+	auto image = FileImageProvider::getFileImage(_module);
+	element = changeObjectDeclarationType(
+			image,
+			element,
+			PointerType::get(ce->getType(), 0),
+			ce);
 }
 
 llvm::GlobalVariable* IrModifier::convertToStructure(
@@ -795,7 +838,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		StructType* strType,
 		retdec::utils::Address& addr)
 {
-	std::cout << "This really works" << std::endl;
+	LOG << "Correcting!" << std::endl;
 	auto alignment = getAlignment(strType);
 	auto padding = alignment;
 	auto origAddr = addr;
@@ -824,11 +867,11 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			auto* origType = dyn_cast<PointerType>(structElement->getType())->getElementType();
 			retdec::utils::Address oldAddr = addr;
 			auto* val = changeObjectDeclarationType(image, structElement, eStrType);
-			correctUsageOfModifiedObject(val, origType);
+			correctUsageOfModifiedObject(structElement, val, origType);
 
 			structElement = dyn_cast<GlobalVariable>(val);
 			structElement = convertToStructure(structElement, eStrType, addr);
-			addr += (addr-oldAddr)%newAlignment; // another solution would be to do this on the end as: addr+=padding;
+			addr += (addr-oldAddr)%newAlignment;
 			replaceElementWithStrIdx(structElement, cgv, idx++);
 
 			continue;
@@ -843,6 +886,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		}
 
 		auto structElement =  getGlobalVariable(image, dbgf, addr);
+
 		// We are sure that element won't be structure so it should be safe to call this method I guess.
 		structElement = dyn_cast<GlobalVariable>(changeObjectType(image, structElement, elem));
 
@@ -855,6 +899,17 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 	// During computation will be original global variable changed.
 	auto origStr = _config->getLlvmGlobalVariable(origAddr);
 	cgv->takeName(origStr);
+
+	auto* econfv = _config->getConfigGlobalVariable(cgv);
+	if (econfv)
+	{
+		retdec::config::Object confv(
+				econfv->getName(),
+				econfv->getStorage());
+		confv.type.setLlvmIr(
+				llvmObjToString(cgv->getType()->getPointerElementType()));
+		_config->getConfig().globals.insert(confv);
+	}
 
 	return cgv;
 }
@@ -878,10 +933,11 @@ llvm::Value* IrModifier::changeObjectDeclarationType(
 		llvm::Constant* init,
 		bool wideString)
 {
-	if (val->getType() == toType)
-	{
-		return val;
-	}
+	//if (dyn_cast<PointerType>(val->getType())->getElementType() == toType)
+	//if (val->getType() == toType)
+	//{
+	//	return val;
+	//}
 
 	if (auto* alloca = dyn_cast<AllocaInst>(val))
 	{
@@ -939,10 +995,8 @@ llvm::Value* IrModifier::changeObjectDeclarationType(
 	}
 }
 
-void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::unordered_set<llvm::Instruction*>* instToErase)
+void IrModifier::correctUsageOfModifiedObject(Value* val, Value* nval, Type* origType, std::unordered_set<llvm::Instruction*>* instToErase)
 {
-	Constant* newConst = dyn_cast<Constant>(val);
-
 	// For some reason, iteration using val->user_begin() and val->user_end()
 	// may break -- there are many uses, but after modifying one of them,
 	// iteration ends before visiting all of them. Even when we increment
@@ -951,6 +1005,7 @@ void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::u
 	// Therefore, we store all uses to our own container.
 	//
 	std::list<User*> users;
+	Constant* newConst = dyn_cast<Constant>(nval);
 	for (const auto& U : val->users())
 	{
 		users.push_back(U);
@@ -968,15 +1023,15 @@ void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::u
 
 			if (val == dst)
 			{
-				PointerType* ptr = dyn_cast<PointerType>(val->getType());
+				PointerType* ptr = dyn_cast<PointerType>(nval->getType());
 				assert(ptr);
 				auto* conv = IrModifier::convertValueToType(src, ptr->getElementType(), store);
 				store->setOperand(0, conv);
-				store->setOperand(1, val);
+				store->setOperand(1, nval);
 			}
 			else
 			{
-				auto* conv = IrModifier::convertValueToType(val, origType, store);
+				auto* conv = IrModifier::convertValueToType(nval, origType, store);
 				store->setOperand(0, conv);
 			}
 		}
@@ -984,7 +1039,7 @@ void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::u
 		{
 			assert(val == load->getPointerOperand());
 
-			auto* newLoad = new LoadInst(val);
+			auto* newLoad = new LoadInst(nval);
 			newLoad->insertBefore(load);
 
 			// load->getType() stays unchanged even after loaded object's type is mutated.
@@ -1007,11 +1062,11 @@ void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::u
 		}
 		else if (auto* cast = dyn_cast<CastInst>(user))
 		{
-			if (val->getType() == cast->getType())
+			if (nval->getType() == cast->getType())
 			{
 				if (val != cast)
 				{
-					cast->replaceAllUsesWith(val);
+					cast->replaceAllUsesWith(nval);
 					if (instToErase)
 					{
 						instToErase->insert(cast);
@@ -1024,7 +1079,7 @@ void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::u
 			}
 			else
 			{
-				auto* conv = IrModifier::convertValueToType(val, cast->getType(), cast);
+				auto* conv = IrModifier::convertValueToType(nval, cast->getType(), cast);
 				if (cast != conv)
 				{
 					cast->replaceAllUsesWith(conv);
@@ -1042,7 +1097,7 @@ void IrModifier::correctUsageOfModifiedObject(Value* val, Type* origType, std::u
 		// maybe GetElementPtrInst should be specially handled?
 		else if (auto* instr = dyn_cast<Instruction>(user))
 		{
-			auto* conv = IrModifier::convertValueToType(val, origType, instr);
+			auto* conv = IrModifier::convertValueToType(nval, origType, instr);
 			if (val != conv)
 			{
 				instr->replaceUsesOfWith(val, conv);
@@ -1113,12 +1168,12 @@ llvm::Value* IrModifier::changeObjectType(
 		return val;
 	}
 
-	if (val->getType() == toType)
-	{
-		return val;
-	}
+	//if (dyn_cast<PointerType>(val->getType())->getElementType() == toType)
+	//{
+	//	return val;
+	//}
 
-	Type* origType = val->getType();
+	Type* origType = dyn_cast<PointerType>(val->getType())->getElementType();
 	auto* nval = changeObjectDeclarationType(
 			objf,
 			val,
@@ -1126,7 +1181,7 @@ llvm::Value* IrModifier::changeObjectType(
 			init,
 			wideString);
 
-	correctUsageOfModifiedObject(nval, origType, instToErase);
+	correctUsageOfModifiedObject(val, nval, origType, instToErase);
 
 	// If it is global structure we need to correct elements usage.
 	if (auto* strType = dyn_cast<StructType>(toType))
