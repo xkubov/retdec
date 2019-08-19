@@ -117,12 +117,26 @@ class IrModifier
 
 		void correctUsageOfModifiedObject(
 				llvm::Value* val,
+				llvm::Value* nval,
 				llvm::Type* origType,
 				std::unordered_set<llvm::Instruction*>* instToErase = nullptr);
+
 	
 	protected:
-		void replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx);
-		llvm::GlobalVariable* convertToStructure(llvm::GlobalVariable* gv, llvm::StructType* strType, retdec::utils::Address& addr);
+		void replaceElementWithStrIdx(
+				llvm::Value* element,
+				llvm::Value* str,
+				std::size_t idx);
+
+		void initializeGlobalWithGetElementPtr(
+				llvm::Value* element,
+				llvm::Value* str,
+				std::size_t idx);
+
+		llvm::GlobalVariable* convertToStructure(
+				llvm::GlobalVariable* gv,
+				llvm::StructType* strType,
+				retdec::utils::Address& addr);
 		std::size_t getAlignment(llvm::StructType* st) const;
 		llvm::Instruction* getElement(llvm::Value* v, std::size_t idx) const;
 		llvm::Instruction* getElement(llvm::Value* v, const std::vector<llvm::Value*>& idxs) const;
