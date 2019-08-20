@@ -717,7 +717,7 @@ std::size_t IrModifier::getAlignment(StructType* st) const
 			eSize = a->getTypeByteSize(e);
 
 		//TODO: did we tought through arrays?
-		
+
 		if (eSize > alignment)
 			alignment = eSize;
 	}
@@ -801,7 +801,7 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 		//	exit(1);
 		}
 	}
-		
+
 	auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
 	auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
 	auto elem = ConstantExpr::getGetElementPtr(structType, dyn_cast<Constant>(str), ArrayRef<Constant*>{zero, eIdx});
@@ -924,7 +924,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		auto* origType = dyn_cast<PointerType>(structElement->getType())->getElementType();
 		auto* val = changeObjectDeclarationType(image, structElement, elem);
 		correctUsageOfModifiedObject(structElement, val, origType);
-		
+
 		structElement = dyn_cast<GlobalVariable>(val);
 
 		replaceElementWithStrIdx(structElement, cgv, idx++);
@@ -950,9 +950,9 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 				llvmObjToString(cgv->getType()->getPointerElementType()));
 		_config->getConfig().globals.insert(confv);
 	}
-	
+
 	// Here might lay some elements
-	
+
 	// In case of recursive structures we must align
 	// space for correct address.
 	addr += padding%alignment; // (addr-oldAddr)%alignment

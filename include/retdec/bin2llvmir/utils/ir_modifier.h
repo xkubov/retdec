@@ -121,7 +121,6 @@ class IrModifier
 				llvm::Type* origType,
 				std::unordered_set<llvm::Instruction*>* instToErase = nullptr);
 
-	
 	protected:
 		void replaceElementWithStrIdx(
 				llvm::Value* element,
