@@ -110,7 +110,7 @@ bool ConstantsAnalysis::run()
 			checkForGlobalInInstruction(RDA, load, load->getPointerOperand());
 		}
 	}
-	
+
 	std::vector<GlobalVariable*> globalList;
 	for (auto& g: _module->getGlobalList())
 	{
@@ -125,7 +125,7 @@ bool ConstantsAnalysis::run()
 		if (!holdsStructureType(g)) {
 			continue;
 		}
-	
+
 		auto* st = getStructType(g);
 		auto image = FileImageProvider::getFileImage(_module);
 		IrModifier irm(_module, _config);
