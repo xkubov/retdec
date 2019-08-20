@@ -838,7 +838,6 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		StructType* strType,
 		retdec::utils::Address& addr)
 {
-	LOG << "Correcting!" << std::endl;
 	auto alignment = getAlignment(strType);
 	auto padding = alignment;
 	auto origAddr = addr;
@@ -848,7 +847,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			strType,
 			gv->isConstant(),
 			gv->getLinkage(),
-			gv->getInitializer()); // Global structures fuck.
+			gv->getInitializer());
 
 	auto image = FileImageProvider::getFileImage(_module);
 	auto dbgf = DebugFormatProvider::getDebugFormat(_module);
