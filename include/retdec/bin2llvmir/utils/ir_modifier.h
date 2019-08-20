@@ -137,6 +137,19 @@ class IrModifier
 				llvm::GlobalVariable* gv,
 				llvm::StructType* strType,
 				retdec::utils::Address& addr);
+
+		void correctElementsInTypeSpace(
+			const retdec::utils::Address& start,
+			const retdec::utils::Address& end,
+			llvm::Value* structure,
+			size_t currentIdx);
+
+		void correctElementsInPadding(
+			const retdec::utils::Address& start,
+			const retdec::utils::Address& end,
+			llvm::Value* structure,
+			size_t lastIdx);
+
 		std::size_t getAlignment(llvm::StructType* st) const;
 		llvm::Instruction* getElement(llvm::Value* v, std::size_t idx) const;
 		llvm::Instruction* getElement(llvm::Value* v, const std::vector<llvm::Value*>& idxs) const;

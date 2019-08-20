@@ -833,6 +833,37 @@ void IrModifier::initializeGlobalWithGetElementPtr(
 			ce);
 }
 
+void IrModifier::correctElementsInTypeSpace(
+		const retdec::utils::Address& start,
+		const retdec::utils::Address& end,
+		llvm::Value* structure,
+		size_t currentIdx)
+{
+	// TODO
+	// 1. Find all elemets and their addresses
+	// 2. Go through these elements
+	//   a. for each determine its maximum possible size
+	//   b. go through its usage
+	//      - change its usage to shifts of structure element.
+	// 3. initialize global variable to point inside element.
+}
+
+void IrModifier::correctElementsInPadding(
+		const retdec::utils::Address& start,
+		const retdec::utils::Address& end,
+		llvm::Value* structure,
+		size_t lastIdx)
+{
+	// TODO
+	// 1. Find all elements in padding (and addresses)
+	// 2. Cast prev structure element to char*
+	// 3. Go through elements and
+	//   a. determine for each its max size
+	//   b. access prev element with gelemptrinst
+	//   c. go through usage of this global
+	// 4. initialize global var to point on particular padding char.
+}
+
 llvm::GlobalVariable* IrModifier::convertToStructure(
 		GlobalVariable* gv,
 		StructType* strType,
@@ -858,19 +889,21 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		if (auto* eStrType = dyn_cast<StructType>(elem))
 		{
 			auto newAlignment = getAlignment(eStrType);
-			if (alignment > padding)
-				addr += (padding)%newAlignment;
+			if (alignment > padding) {
+				auto naddr = addr+(padding)%newAlignment;
+				correctElementsInPadding(addr, naddr, gv, idx-1);
+				addr = naddr;
+			}
 
 			padding = alignment;
+
 			GlobalVariable* structElement = getGlobalVariable(image, dbgf, addr);
 			auto* origType = dyn_cast<PointerType>(structElement->getType())->getElementType();
-			retdec::utils::Address oldAddr = addr;
 			auto* val = changeObjectDeclarationType(image, structElement, eStrType);
 			correctUsageOfModifiedObject(structElement, val, origType);
 
 			structElement = dyn_cast<GlobalVariable>(val);
 			structElement = convertToStructure(structElement, eStrType, addr);
-			addr += (addr-oldAddr)%newAlignment;
 			replaceElementWithStrIdx(structElement, cgv, idx++);
 
 			continue;
@@ -879,17 +912,23 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		auto a = AbiProvider::getAbi(_module);
 		auto elemSize = a->getTypeByteSize(elem);
 		if (padding < elemSize) {
-
+			correctElementsInPadding(addr, addr+padding, gv, idx-1);
 			addr += padding;
 			padding = alignment;
 		}
 
 		auto structElement =  getGlobalVariable(image, dbgf, addr);
 
-		// We are sure that element won't be structure so it should be safe to call this method I guess.
-		structElement = dyn_cast<GlobalVariable>(changeObjectType(image, structElement, elem));
+		// TODO:
+		// following 3 linses of code can go into replaceElementWithStrIdx.
+		auto* origType = dyn_cast<PointerType>(structElement->getType())->getElementType();
+		auto* val = changeObjectDeclarationType(image, structElement, elem);
+		correctUsageOfModifiedObject(structElement, val, origType);
+		
+		structElement = dyn_cast<GlobalVariable>(val);
 
 		replaceElementWithStrIdx(structElement, cgv, idx++);
+		correctElementsInTypeSpace(addr, addr+elemSize, gv, idx);
 
 		padding -= elemSize;
 		addr += elemSize;
@@ -899,6 +938,8 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 	auto origStr = _config->getLlvmGlobalVariable(origAddr);
 	cgv->takeName(origStr);
 
+	//TODO
+	//is this necessary?
 	auto* econfv = _config->getConfigGlobalVariable(cgv);
 	if (econfv)
 	{
@@ -909,6 +950,12 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 				llvmObjToString(cgv->getType()->getPointerElementType()));
 		_config->getConfig().globals.insert(confv);
 	}
+	
+	// Here might lay some elements
+	
+	// In case of recursive structures we must align
+	// space for correct address.
+	addr += padding%alignment; // (addr-oldAddr)%alignment
 
 	return cgv;
 }
