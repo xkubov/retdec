@@ -1052,6 +1052,10 @@ void IrModifier::correctElementsInPadding(
 		llvm::Value* structure,
 		size_t lastIdx)
 {
+	if (start > end)
+	{
+		return;
+	}
 	// Find all elements between range
 	std::vector<GlobalVariable*> globals = searchAddressRangeForGlobals(start, end);
 
@@ -1076,6 +1080,7 @@ void IrModifier::correctElementsInPadding(
 
 		auto _abi = AbiProvider::getAbi(_module);
 		elemSize = elemSize < _abi->getWordSize() ? elemSize:_abi->getWordSize();
+		// TODO: only powers of 2
 
 		Value* global = *i;
 		auto nType = IntegerType::getIntNTy(_module->getContext(), elemSize*8);
@@ -1225,7 +1230,12 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 
 	// In case of recursive structures we must align
 	// space for correct address.
-	addr += padding%alignment; // (addr-oldAddr)%alignment
+	padding = padding%alignment;
+	if (padding)
+	{
+		correctElementsInPadding(addr, addr+padding, cgv, idx-1);
+		addr += padding; // (addr-oldAddr)%alignment
+	}
 
 	return cgv;
 }
