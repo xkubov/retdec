@@ -10,6 +10,7 @@
 #include <llvm/IR/InstrTypes.h>
 
 #include "retdec/utils/string.h"
+#include "retdec/utils/math.h"
 #include "retdec/bin2llvmir/providers/abi/abi.h"
 #include "retdec/bin2llvmir/providers/asm_instruction.h"
 #include "retdec/bin2llvmir/providers/names.h"
@@ -823,7 +824,7 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 	auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
 	auto elem = ConstantExpr::getGetElementPtr(structType, dyn_cast<Constant>(str), ArrayRef<Constant*>{zero, eIdx});
 
-	LOG << "elem: " << llvmObjToString(elem) << std::endl;
+	//TODO: some constants are not replaced
 	LOG << "Constant uses" << std::endl;
 	for (auto * u: element->users())
 	{
@@ -864,19 +865,32 @@ void IrModifier::initializeGlobalWithGetElementPtr(
 			ce);
 }
 
+size_t IrModifier::getNearestPowerOfTwo(size_t num) const
+{
+	if (!num)
+		return 0;
+
+	size_t bits = 0;
+	while (num >>= 1)
+		bits++;
+
+	return 1 << bits;
+}
+
+/**
+ * 1. Find all elemets and their addresses
+ * 2. Go through these elements
+ *   a. for each determine its maximum possible size
+ *   b. go through its usage
+ *      - change its usage to shifts of structure element.
+ * 3. initialize global variable to point inside element.
+ */
 void IrModifier::correctElementsInTypeSpace(
 		const retdec::utils::Address& start,
 		const retdec::utils::Address& end,
 		llvm::Value* structure,
 		size_t currentIdx)
 {
-	// TODO
-	// 1. Find all elemets and their addresses
-	// 2. Go through these elements
-	//   a. for each determine its maximum possible size
-	//   b. go through its usage
-	//      - change its usage to shifts of structure element.
-	// 3. initialize global variable to point inside element.
 	if (start >= end)
 	{
 		return;
@@ -886,7 +900,6 @@ void IrModifier::correctElementsInTypeSpace(
 
 	for (auto i = globals.begin(); i != globals.end(); i++)
 	{
-		LOG << "Correcting " << llvmObjToString(*i) << std::endl;
 		// Determine element size
 		std::size_t elemSize = 0;
 		std::size_t supElemSize = end - start;
@@ -900,8 +913,8 @@ void IrModifier::correctElementsInTypeSpace(
 			auto nxtElemAddr = _config->getGlobalAddress(*(i+1));
 			elemSize = nxtElemAddr - elemAddr;
 		}
-		if (elemSize > 1)
-			elemSize -= elemSize%2;
+		
+		elemSize = getNearestPowerOfTwo(elemSize);
 
 		auto _abi = AbiProvider::getAbi(_module);
 		elemSize = elemSize < _abi->getWordSize() ? elemSize:_abi->getWordSize();
@@ -998,7 +1011,6 @@ void IrModifier::correctElementsInTypeSpace(
 				saved = CastInst::CreateZExtOrBitCast(saved, origType, "", st);
 				saved = BinaryOperator::CreateLShr(saved, eOff, "", st);
 				saved = BinaryOperator::CreateOr(saved, gepLoad, "", st);
-				LOG << llvmObjToString(saved) << std::endl;
 
 				new StoreInst(saved, gep, st);
 				st->eraseFromParent();
@@ -1026,7 +1038,6 @@ std::vector<GlobalVariable*> IrModifier::searchAddressRangeForGlobals(
 	{
 		if (auto* gv = _config->getLlvmGlobalVariable(i))
 		{
-			LOG << "In search: " << llvmObjToString(gv) << std::endl;
 			globals.push_back(gv);
 		}
 	}
@@ -1061,7 +1072,6 @@ void IrModifier::correctElementsInPadding(
 
 	for (auto i = globals.begin(); i != globals.end(); i++)
 	{
-		LOG << "Correcting " << llvmObjToString(*i) << std::endl;
 		// Determine element size
 		std::size_t elemSize = 0;
 		auto elemAddr = _config->getGlobalAddress(*i);
@@ -1075,8 +1085,7 @@ void IrModifier::correctElementsInPadding(
 			elemSize = nxtElemAddr - elemAddr;
 		}
 		
-		if (elemSize > 1)
-			elemSize -= elemSize%2;
+		elemSize = getNearestPowerOfTwo(elemSize);
 
 		auto _abi = AbiProvider::getAbi(_module);
 		elemSize = elemSize < _abi->getWordSize() ? elemSize:_abi->getWordSize();

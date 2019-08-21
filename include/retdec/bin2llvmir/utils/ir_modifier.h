@@ -115,6 +115,7 @@ class IrModifier
 				llvm::Constant* init = nullptr,
 				bool wideString = false);
 
+		size_t getNearestPowerOfTwo(size_t num) const;
 		void correctUsageOfModifiedObject(
 				llvm::Value* val,
 				llvm::Value* nval,
