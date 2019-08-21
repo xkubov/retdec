@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/InstrTypes.h>
 
 #include "retdec/utils/string.h"
 #include "retdec/bin2llvmir/providers/abi/abi.h"
@@ -857,6 +858,138 @@ void IrModifier::correctElementsInTypeSpace(
 	//   b. go through its usage
 	//      - change its usage to shifts of structure element.
 	// 3. initialize global variable to point inside element.
+	if (start >= end)
+	{
+		return;
+	}
+
+	std::vector<GlobalVariable*> globals = searchAddressRangeForGlobals(start+1, end);
+
+	for (auto i = globals.begin(); i != globals.end(); i++)
+	{
+		// Determine element size
+		std::size_t elemSize = 0;
+		std::size_t supElemSize = end - start;
+		auto elemAddr = _config->getGlobalAddress(*i);
+		if (i+1 == globals.end())
+		{
+			elemSize = end - elemAddr;
+		}
+		else
+		{
+			auto nxtElemAddr = _config->getGlobalAddress(*(i+1));
+			elemSize = nxtElemAddr - elemAddr;
+		}
+		if (elemSize > 1)
+			elemSize -= elemSize%2;
+
+		auto _abi = AbiProvider::getAbi(_module);
+		elemSize = elemSize < _abi->getWordSize() ? elemSize:_abi->getWordSize();
+
+		Value* global = *i;
+		auto nType = IntegerType::getIntNTy(_module->getContext(), elemSize*8);
+		auto image = FileImageProvider::getFileImage(_module);
+		global = changeObjectType(image, global, nType);
+
+		// Users will be changed so we must save all of the first
+		std::vector<User*> users;
+		for (auto* u: global->users())
+			users.push_back(u);
+
+		std::size_t elemOffset = elemAddr - start;
+
+		for (auto* u: users)
+		{
+			if (auto* ld = dyn_cast<LoadInst>(u))
+			{
+				// [ |x| |x] 
+				// shr = origSize - typeSize - offset
+				// shl = offset
+
+				auto* gep = getElement(structure, currentIdx);
+				gep->insertBefore(ld);
+				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
+
+				std::size_t shl = elemOffset;
+				auto* lOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), shl, false));
+
+				auto* load = new LoadInst(origType, gep, "", ld);
+				llvm::Instruction* shifts = load;
+				if (shl)
+					shifts = BinaryOperator::CreateShl(shifts, lOff, "", ld);
+
+				auto* trunc = CastInst::CreateTruncOrBitCast(shifts, nType, "", ld);
+
+				ld->replaceAllUsesWith(trunc);
+				ld->eraseFromParent();
+			}
+			else if (auto * st = dyn_cast<StoreInst>(u))
+			{
+				// X  = [x|x]
+				// Y  = [ |x|x| | ]
+				//
+				// Xr = Ysize - off
+				// Xl = off + Xsize
+				// Yd = (Y >> Xr) << Xr;
+				// Yu = (Y << Xl) >> Xl;
+				// Y  = Yd | Yu
+				// X  = extend(X, Ysize)
+				// X  >>= off
+				// Y = Y | X
+
+				// X
+				auto* saved = st->getValueOperand();
+				// Y
+				auto* gep = getElement(structure, currentIdx);
+				gep->insertBefore(st);
+				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
+				Instruction* gepLoad = new LoadInst(origType, gep, "", st);
+
+
+				// Xr
+				std::size_t ro = supElemSize - elemOffset;
+				// Xl
+				std::size_t lo = elemOffset + elemSize;
+				auto* rOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), ro, false));
+				auto* lOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), lo, false));
+				auto* eOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), elemOffset, false));
+				
+				llvm::Instruction* lgap = nullptr, * rgap = nullptr;
+				// Yd
+				if (ro)
+					rgap = BinaryOperator::CreateLShr(gepLoad, rOff, "", st);
+				// Yu
+				if (lo)
+					lgap = BinaryOperator::CreateShl(gepLoad, lOff, "", st);
+
+				// Y = Yd | Yu
+				if (lgap && rgap)
+				{
+					gepLoad = BinaryOperator::CreateOr(rgap, lgap, "", st);
+				}
+				else
+				{
+					gepLoad = rgap ? rgap : lgap;
+				}
+				
+				saved = CastInst::CreateZExtOrBitCast(saved, origType, "", st);
+				saved = BinaryOperator::CreateLShr(saved, eOff, "", st);
+				saved = BinaryOperator::CreateOr(saved, gepLoad, "", st);
+
+				new StoreInst(saved, gep, st);
+				st->eraseFromParent();
+			}
+			else if (auto* gp = dyn_cast<GetElementPtrInst>(u))
+			{
+				// TODO: this should not happen, please check.
+				assert(false);
+			}
+
+			// TODO:
+			// initialize global variable with constant getelementptr.
+			// replace all usage with constant getelementptr
+		}
+	}
 }
 
 // TODO: move this to config
@@ -864,9 +997,6 @@ std::vector<GlobalVariable*> IrModifier::searchAddressRangeForGlobals(
 		const retdec::utils::Address& start,
 		const retdec::utils::Address& end)
 {
-	LOG << "Searcing" << std::endl;
-	LOG << "start: " << start << std::endl;
-	LOG << "end: " << end << std::endl;
 	std::vector<GlobalVariable*> globals;
 	for (auto i = start; i < end; i++)
 	{
@@ -900,10 +1030,6 @@ void IrModifier::correctElementsInPadding(
 	// Find all elements between range
 	std::vector<GlobalVariable*> globals = searchAddressRangeForGlobals(start, end);
 
-	if (globals.empty())
-		return;
-
-
 	for (auto i = globals.begin(); i != globals.end(); i++)
 	{
 		LOG << llvmObjToString(*i) << std::endl;
@@ -919,6 +1045,10 @@ void IrModifier::correctElementsInPadding(
 			auto nxtElemAddr = _config->getGlobalAddress(*(i+1));
 			elemSize = nxtElemAddr - elemAddr;
 		}
+		
+		if (elemSize > 1)
+			elemSize -= elemSize%2;
+
 		auto _abi = AbiProvider::getAbi(_module);
 		elemSize = elemSize < _abi->getWordSize() ? elemSize:_abi->getWordSize();
 
@@ -1006,7 +1136,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			auto newAlignment = getAlignment(eStrType);
 			if (alignment > padding) {
 				auto naddr = addr+(padding)%newAlignment;
-				correctElementsInPadding(addr+1, naddr, gv, idx-1);
+				correctElementsInPadding(addr, naddr, cgv, idx-1);
 				addr = naddr;
 			}
 
@@ -1027,7 +1157,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 		auto a = AbiProvider::getAbi(_module);
 		auto elemSize = a->getTypeByteSize(elem);
 		if (padding < elemSize) {
-			correctElementsInPadding(addr, addr+padding, gv, idx-1);
+			correctElementsInPadding(addr, addr+padding, cgv, idx-1);
 			addr += padding;
 			padding = alignment;
 		}
@@ -1042,8 +1172,8 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 
 		structElement = dyn_cast<GlobalVariable>(val);
 
+		correctElementsInTypeSpace(addr, addr+elemSize, cgv, idx);
 		replaceElementWithStrIdx(structElement, cgv, idx++);
-		correctElementsInTypeSpace(addr, addr+elemSize, gv, idx);
 
 		padding -= elemSize;
 		addr += elemSize;
