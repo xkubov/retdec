@@ -772,12 +772,16 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 		uses.push_back(u);
 	}
 
-	for (auto u: uses) {
+	for (auto i = uses.begin(); i != uses.end(); i++) {
+		auto* u = *i;
 		if (auto* ld = dyn_cast<LoadInst>(u))
 		{
 			auto elemVal = getElement(str, idx);
 			elemVal->insertBefore(ld);
-			auto load = new LoadInst(elementType, elemVal, "", ld);
+			if (elemVal->getType() != ld->getPointerOperand()->getType())
+				elemVal = CastInst::CreatePointerCast(elemVal, ld->getPointerOperand()->getType(), "", ld);
+
+			Instruction* load = new LoadInst(dyn_cast<PointerType>(elemVal->getType())->getElementType(), elemVal, "", ld);
 			ld->replaceAllUsesWith(load);
 			ld->eraseFromParent();
 		}
@@ -785,7 +789,11 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 		{
 			auto elemVal = getElement(str, idx);
 			elemVal->insertBefore(st);
-			new StoreInst(st->getValueOperand(), elemVal, st);
+			if (elemVal->getType() != st->getPointerOperand()->getType())
+				elemVal = CastInst::CreatePointerCast(elemVal, st->getPointerOperand()->getType(), "", st);
+
+			auto* s = new StoreInst(st->getValueOperand(), elemVal);
+			s->insertAfter(st);
 			st->eraseFromParent();
 		}
 		else if (auto* ep = dyn_cast<GetElementPtrInst>(u))
@@ -807,18 +815,29 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 			ep->replaceAllUsesWith(elem);
 			ep->eraseFromParent();
 		}
-		else
-		{
-			//LOG << "usage: " << llvmObjToString(u) << std::endl;
 		//	exit(1);
-		}
 	}
+
 
 	auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
 	auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
 	auto elem = ConstantExpr::getGetElementPtr(structType, dyn_cast<Constant>(str), ArrayRef<Constant*>{zero, eIdx});
 
+	LOG << "elem: " << llvmObjToString(elem) << std::endl;
+	LOG << "Constant uses" << std::endl;
+	for (auto * u: element->users())
+	{
+		LOG << "\t" << llvmObjToString(u) << std::endl;
+	}
+
 	element->replaceAllUsesWith(elem);
+
+	LOG << "Replaced uses" << std::endl;
+	for (auto * u: elem->users())
+	{
+		LOG << "\t" << llvmObjToString(u) << std::endl;
+	}
+
 
 	initializeGlobalWithGetElementPtr(element, str, idx);
 }
@@ -867,6 +886,7 @@ void IrModifier::correctElementsInTypeSpace(
 
 	for (auto i = globals.begin(); i != globals.end(); i++)
 	{
+		LOG << "Correcting " << llvmObjToString(*i) << std::endl;
 		// Determine element size
 		std::size_t elemSize = 0;
 		std::size_t supElemSize = end - start;
@@ -910,15 +930,14 @@ void IrModifier::correctElementsInTypeSpace(
 				gep->insertBefore(ld);
 				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
 
-				std::size_t shl = elemOffset;
+				std::size_t shl = elemOffset*8;
 				auto* lOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), shl, false));
 
-				auto* load = new LoadInst(origType, gep, "", ld);
-				llvm::Instruction* shifts = load;
+				Instruction* load = new LoadInst(origType, gep, "", ld);
 				if (shl)
-					shifts = BinaryOperator::CreateShl(shifts, lOff, "", ld);
+					load = BinaryOperator::CreateShl(load, lOff, "", ld);
 
-				auto* trunc = CastInst::CreateTruncOrBitCast(shifts, nType, "", ld);
+				auto* trunc = CastInst::CreateTruncOrBitCast(load, nType, "", ld);
 
 				ld->replaceAllUsesWith(trunc);
 				ld->eraseFromParent();
@@ -947,20 +966,24 @@ void IrModifier::correctElementsInTypeSpace(
 
 
 				// Xr
-				std::size_t ro = supElemSize - elemOffset;
+				std::size_t ro = (supElemSize - elemOffset)*8;
 				// Xl
-				std::size_t lo = elemOffset + elemSize;
+				std::size_t lo = (elemOffset + elemSize)*8;
 				auto* rOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), ro, false));
 				auto* lOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), lo, false));
-				auto* eOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), elemOffset, false));
+				auto* eOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), elemOffset*8, false));
 				
 				llvm::Instruction* lgap = nullptr, * rgap = nullptr;
 				// Yd
-				if (ro)
+				if (ro){
 					rgap = BinaryOperator::CreateLShr(gepLoad, rOff, "", st);
+					rgap = BinaryOperator::CreateShl(rgap, rOff, "", st);
+				}
 				// Yu
-				if (lo)
+				if (lo != supElemSize*8) {
 					lgap = BinaryOperator::CreateShl(gepLoad, lOff, "", st);
+					lgap = BinaryOperator::CreateLShr(lgap, lOff, "", st);
+				}
 
 				// Y = Yd | Yu
 				if (lgap && rgap)
@@ -975,6 +998,7 @@ void IrModifier::correctElementsInTypeSpace(
 				saved = CastInst::CreateZExtOrBitCast(saved, origType, "", st);
 				saved = BinaryOperator::CreateLShr(saved, eOff, "", st);
 				saved = BinaryOperator::CreateOr(saved, gepLoad, "", st);
+				LOG << llvmObjToString(saved) << std::endl;
 
 				new StoreInst(saved, gep, st);
 				st->eraseFromParent();
@@ -1002,6 +1026,7 @@ std::vector<GlobalVariable*> IrModifier::searchAddressRangeForGlobals(
 	{
 		if (auto* gv = _config->getLlvmGlobalVariable(i))
 		{
+			LOG << "In search: " << llvmObjToString(gv) << std::endl;
 			globals.push_back(gv);
 		}
 	}
@@ -1032,7 +1057,7 @@ void IrModifier::correctElementsInPadding(
 
 	for (auto i = globals.begin(); i != globals.end(); i++)
 	{
-		LOG << llvmObjToString(*i) << std::endl;
+		LOG << "Correcting " << llvmObjToString(*i) << std::endl;
 		// Determine element size
 		std::size_t elemSize = 0;
 		auto elemAddr = _config->getGlobalAddress(*i);
