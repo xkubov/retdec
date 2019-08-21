@@ -728,6 +728,17 @@ std::size_t IrModifier::getAlignment(StructType* st) const
 	return alignment;
 }
 
+Instruction* IrModifier::getArrayElement(llvm::Value* v, std::size_t idx) const
+{
+	auto* var = dyn_cast<PointerType>(v->getType());
+	assert(var && "Expects variable.");
+
+	auto eIdx= ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+
+	return GetElementPtrInst::Create(var->getElementType(), v, {eIdx});
+}
+
+
 Instruction* IrModifier::getElement(llvm::Value* v, std::size_t idx) const
 {
 	auto* var = dyn_cast<PointerType>(v->getType());
@@ -848,20 +859,124 @@ void IrModifier::correctElementsInTypeSpace(
 	// 3. initialize global variable to point inside element.
 }
 
+// TODO: move this to config
+std::vector<GlobalVariable*> IrModifier::searchAddressRangeForGlobals(
+		const retdec::utils::Address& start,
+		const retdec::utils::Address& end)
+{
+	LOG << "Searcing" << std::endl;
+	LOG << "start: " << start << std::endl;
+	LOG << "end: " << end << std::endl;
+	std::vector<GlobalVariable*> globals;
+	for (auto i = start; i < end; i++)
+	{
+		if (auto* gv = _config->getLlvmGlobalVariable(i))
+		{
+			globals.push_back(gv);
+		}
+	}
+
+	return globals;
+}
+
+/** 
+ * 1. Find all elements in padding (and addresses)
+ * 2. Cast prev structure element to char*
+ * 3. Go through elements and
+ *   a. determine for each its max size
+ *   b. access prev element with gelemptrinst
+ *   c. go through usage of this global
+ * 4. initialize global var to point on particular padding char.
+ *
+ * @param start address on which padding starts
+ * @param end   address on which padding ends
+ */
 void IrModifier::correctElementsInPadding(
 		const retdec::utils::Address& start,
 		const retdec::utils::Address& end,
 		llvm::Value* structure,
 		size_t lastIdx)
 {
-	// TODO
-	// 1. Find all elements in padding (and addresses)
-	// 2. Cast prev structure element to char*
-	// 3. Go through elements and
-	//   a. determine for each its max size
-	//   b. access prev element with gelemptrinst
-	//   c. go through usage of this global
-	// 4. initialize global var to point on particular padding char.
+	// Find all elements between range
+	std::vector<GlobalVariable*> globals = searchAddressRangeForGlobals(start, end);
+
+	if (globals.empty())
+		return;
+
+
+	for (auto i = globals.begin(); i != globals.end(); i++)
+	{
+		LOG << llvmObjToString(*i) << std::endl;
+		// Determine element size
+		std::size_t elemSize = 0;
+		auto elemAddr = _config->getGlobalAddress(*i);
+		if (i+1 == globals.end())
+		{
+			elemSize = end - elemAddr;
+		}
+		else
+		{
+			auto nxtElemAddr = _config->getGlobalAddress(*(i+1));
+			elemSize = nxtElemAddr - elemAddr;
+		}
+		auto _abi = AbiProvider::getAbi(_module);
+		elemSize = elemSize < _abi->getWordSize() ? elemSize:_abi->getWordSize();
+
+		Value* global = *i;
+		auto nType = IntegerType::getIntNTy(_module->getContext(), elemSize*8);
+		auto nTypePtr = PointerType::getIntNPtrTy(_module->getContext(), elemSize*8);
+		auto image = FileImageProvider::getFileImage(_module);
+		global = changeObjectType(image, global, nType);
+
+		// Users will be changed so we must save all of the first
+		std::vector<User*> users;
+		for (auto* u: global->users())
+			users.push_back(u);
+
+		for (auto* u: users)
+		{
+			if (auto* ld = dyn_cast<LoadInst>(u))
+			{
+				auto *gep = getElement(structure, lastIdx);
+				gep->insertBefore(ld);
+				auto *chptr = PointerType::getInt8PtrTy(_module->getContext());
+				auto *cast = BitCastInst::CreatePointerCast(gep, chptr);
+				cast->insertBefore(ld);
+				gep = getArrayElement(cast, elemAddr-start+1);
+				gep->insertBefore(ld);
+				cast = BitCastInst::CreatePointerCast(gep, nTypePtr);
+				cast->insertBefore(ld);
+
+				auto load = new LoadInst(nType, cast, "", ld);
+				ld->replaceAllUsesWith(load);
+				ld->eraseFromParent();
+			}
+			else if (auto * st = dyn_cast<StoreInst>(u))
+			{
+				auto *gep = getElement(structure, lastIdx);
+				gep->insertBefore(st);
+				auto *chptr = PointerType::getInt8PtrTy(_module->getContext());
+				auto *cast = BitCastInst::CreatePointerCast(gep, chptr);
+				cast->insertBefore(st);
+				gep = getArrayElement(cast, elemAddr-start+1);
+				gep->insertBefore(st);
+				cast = BitCastInst::CreatePointerCast(gep, nTypePtr);
+				cast->insertBefore(st);
+			
+				new StoreInst(st->getValueOperand(), cast, st);
+				st->eraseFromParent();
+			}
+			else if (auto* gp = dyn_cast<GetElementPtrInst>(u))
+			{
+				// TODO: this should not happen, please check.
+				assert(false);
+			}
+
+			// TODO:
+			// initialize global variable with constant getelementptr.
+			// replace all usage with constant getelementptr
+		}
+	}
 }
 
 llvm::GlobalVariable* IrModifier::convertToStructure(
@@ -891,7 +1006,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			auto newAlignment = getAlignment(eStrType);
 			if (alignment > padding) {
 				auto naddr = addr+(padding)%newAlignment;
-				correctElementsInPadding(addr, naddr, gv, idx-1);
+				correctElementsInPadding(addr+1, naddr, gv, idx-1);
 				addr = naddr;
 			}
 

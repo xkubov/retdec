@@ -149,8 +149,13 @@ class IrModifier
 			llvm::Value* structure,
 			size_t lastIdx);
 
+		std::vector<llvm::GlobalVariable*> searchAddressRangeForGlobals(
+			const retdec::utils::Address& start,
+			const retdec::utils::Address& end);
+
 		std::size_t getAlignment(llvm::StructType* st) const;
 		llvm::Instruction* getElement(llvm::Value* v, std::size_t idx) const;
+		llvm::Instruction* getArrayElement(llvm::Value* v, std::size_t idx) const;
 		llvm::Instruction* getElement(llvm::Value* v, const std::vector<llvm::Value*>& idxs) const;
 
 	protected:
