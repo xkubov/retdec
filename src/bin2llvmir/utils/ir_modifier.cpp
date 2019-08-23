@@ -590,17 +590,17 @@ GlobalVariable* IrModifier::getGlobalVariable(
 		bool strict,
 		std::string name)
 {
+	if (auto* gv = _config->getLlvmGlobalVariable(name, addr))
+	{
+		return gv;
+	}
+
 	if (!globalVariableCanBeCreated(_module, _config, objf, addr, strict))
 	{
 		return nullptr;
 	}
 
 	retdec::utils::appendHex(name, addr);
-
-	if (auto* gv = _config->getLlvmGlobalVariable(name, addr))
-	{
-		return gv;
-	}
 
 	Constant* c = nullptr;
 	Type* t = Abi::getDefaultType(_module);
@@ -1288,7 +1288,8 @@ llvm::Value* IrModifier::changeObjectDeclarationType(
 	{
 		if (init == nullptr)
 		{
-			init = objf->getConstant(
+			if (objf)
+				init = objf->getConstant(
 					toType,
 					_config->getGlobalAddress(ogv),
 					wideString);
