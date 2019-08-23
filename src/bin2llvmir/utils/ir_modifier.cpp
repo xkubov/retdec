@@ -1150,6 +1150,14 @@ void IrModifier::correctElementsInPadding(
 
 llvm::GlobalVariable* IrModifier::convertToStructure(
 		GlobalVariable* gv,
+		StructType* strType)
+{
+	auto addr = _config->getGlobalAddress(gv);
+	return convertToStructure(gv, strType, addr);
+}
+
+llvm::GlobalVariable* IrModifier::convertToStructure(
+		GlobalVariable* gv,
 		StructType* strType,
 		retdec::utils::Address& addr)
 {

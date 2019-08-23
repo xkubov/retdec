@@ -107,6 +107,9 @@ class IrModifier
 				llvm::Argument* arg,
 				llvm::Type* type);
 
+		llvm::GlobalVariable* convertToStructure(
+				llvm::GlobalVariable* gv,
+				llvm::StructType* strType);
 	protected:
 		llvm::Value* changeObjectDeclarationType(
 				FileImage* objf,
