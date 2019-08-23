@@ -930,6 +930,7 @@ void IrModifier::correctElementsInTypeSpace(
 			users.push_back(u);
 
 		std::size_t elemOffset = elemAddr - start;
+		std::size_t origSize = end - start;
 
 		for (auto* u: users)
 		{
@@ -943,12 +944,12 @@ void IrModifier::correctElementsInTypeSpace(
 				gep->insertBefore(ld);
 				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
 
-				std::size_t shl = elemOffset*8;
+				std::size_t shl = (origSize - elemSize - elemOffset)*8;
 				auto* lOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), shl, false));
 
 				Instruction* load = new LoadInst(origType, gep, "", ld);
 				if (shl)
-					load = BinaryOperator::CreateShl(load, lOff, "", ld);
+					load = BinaryOperator::CreateLShr(load, lOff, "", ld);
 
 				auto* trunc = CastInst::CreateTruncOrBitCast(load, nType, "", ld);
 
@@ -1167,13 +1168,17 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 
 	auto cgv = new GlobalVariable(
 			*_module,
-			strType,
+			dyn_cast<PointerType>(gv->getType())->getElementType(),
 			gv->isConstant(),
 			gv->getLinkage(),
 			gv->getInitializer());
 
+
 	auto image = FileImageProvider::getFileImage(_module);
 	auto dbgf = DebugFormatProvider::getDebugFormat(_module);
+
+	// This way we will have initializer converted too.
+	cgv = dyn_cast<GlobalVariable>(changeObjectDeclarationType(image, cgv, strType));
 
 	std::size_t idx = 0;
 	for (auto elem: strType->elements())
@@ -1209,8 +1214,7 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 			padding = alignment;
 		}
 
-		auto structElement =  getGlobalVariable(image, dbgf, addr);
-
+		auto structElement = getGlobalVariable(image, dbgf, addr);
 		// TODO:
 		// following 3 linses of code can go into replaceElementWithStrIdx.
 		auto* origType = dyn_cast<PointerType>(structElement->getType())->getElementType();
@@ -1221,7 +1225,6 @@ llvm::GlobalVariable* IrModifier::convertToStructure(
 
 		correctElementsInTypeSpace(addr, addr+elemSize, cgv, idx);
 		replaceElementWithStrIdx(structElement, cgv, idx++);
-
 		padding -= elemSize;
 		addr += elemSize;
 	}
