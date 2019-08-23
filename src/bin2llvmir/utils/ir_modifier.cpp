@@ -18,6 +18,8 @@
 #include "retdec/bin2llvmir/utils/ir_modifier.h"
 #include "retdec/bin2llvmir/utils/llvm.h"
 
+#define debug_enabled true
+
 using namespace llvm;
 
 //
