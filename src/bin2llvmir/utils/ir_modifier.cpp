@@ -724,9 +724,6 @@ std::size_t IrModifier::getAlignment(StructType* st) const
 			alignment = eSize;
 	}
 
-	if (alignment > a->getWordSize())
-		alignment = a->getWordSize();
-
 	return alignment;
 }
 
