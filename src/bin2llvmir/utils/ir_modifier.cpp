@@ -813,6 +813,21 @@ void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str
 			ep->replaceAllUsesWith(elem);
 			ep->eraseFromParent();
 		}
+		else if (auto* i = dyn_cast<PtrToIntInst>(u))
+		{
+			auto zero = ConstantInt::get(IntegerType::get(_module->getContext(), 32), 0);
+			auto eIdx = ConstantInt::get(IntegerType::get(_module->getContext(), 32), idx);
+
+			auto elem = getElement(str, {zero, eIdx, zero});
+			elem->insertBefore(i);
+			elem = new LoadInst(dyn_cast<PointerType>(elem->getType())->getElementType(), elem, "", i);
+			i->replaceAllUsesWith(elem);
+			i->eraseFromParent();
+		}
+		else if (auto* j = dyn_cast<InsertValueInst>(u))
+		{
+			exit(1);
+		}
 		//	exit(1);
 	}
 
@@ -940,11 +955,19 @@ void IrModifier::correctElementsInTypeSpace(
 				auto* gep = getElement(structure, currentIdx);
 				gep->insertBefore(ld);
 				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
+				if (!origType->isIntegerTy()) {
+					auto* intRep = IntegerType::getIntNTy(
+								_module->getContext(),
+								_abi->getTypeBitSize(origType));
+					gep = CastInst::CreateBitOrPointerCast(gep, PointerType::get(intRep, 0), "", ld);
+					origType = intRep;
+				}
 
 				std::size_t shl = (origSize - elemSize - elemOffset)*8;
 				auto* lOff = ConstantInt::get(_module->getContext(), APInt(_abi->getTypeBitSize(origType), shl, false));
 
 				Instruction* load = new LoadInst(origType, gep, "", ld);
+
 				if (shl)
 					load = BinaryOperator::CreateLShr(load, lOff, "", ld);
 
@@ -972,9 +995,26 @@ void IrModifier::correctElementsInTypeSpace(
 				// Y
 				auto* gep = getElement(structure, currentIdx);
 				gep->insertBefore(st);
-				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
-				Instruction* gepLoad = new LoadInst(origType, gep, "", st);
 
+				auto* origType = dyn_cast<PointerType>(gep->getType())->getElementType();
+				if (!origType->isIntegerTy())
+				{
+					auto* intRep = IntegerType::getIntNTy(
+								_module->getContext(),
+								_abi->getTypeBitSize(origType));
+					gep = CastInst::CreateBitOrPointerCast(gep, PointerType::get(intRep, 0), "", st);
+					origType = intRep;
+				}
+
+				if (!saved->getType()->isIntegerTy())
+				{
+					auto* intRep = IntegerType::getIntNTy(
+								_module->getContext(),
+								_abi->getTypeBitSize(saved->getType()));
+					saved = CastInst::CreateBitOrPointerCast(saved, intRep, "", st);
+				}
+
+				Instruction* gepLoad = new LoadInst(origType, gep, "", st);
 
 				// Xr
 				std::size_t ro = (supElemSize - elemOffset)*8;
