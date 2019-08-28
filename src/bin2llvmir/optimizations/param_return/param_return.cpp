@@ -191,27 +191,6 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 		return;
 	}
 
-	// Main
-	//
-	if (fnc->getName() == "main")
-	{
-		auto charPointer = PointerType::get(
-			Type::getInt8Ty(_module->getContext()), 0);
-
-		dataflow->setArgTypes(
-		{
-			_abi->getDefaultType(),
-			PointerType::get(charPointer, 0)
-		},
-		{
-			"argc",
-			"argv"
-		});
-
-		dataflow->setRetType(_abi->getDefaultType());
-		return;
-	}
-
 	// LTI info.
 	//
 	auto* cf = _config->getConfigFunction(fnc);
@@ -298,7 +277,7 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 	}
 
 	auto configFnc = _config->getConfigFunction(fnc);
-	if (_config->getConfig().isIda() && configFnc)
+	if (configFnc)
 	{
 		std::vector<Type*> argTypes;
 		std::vector<std::string> argNames;
@@ -330,13 +309,29 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 		// TODO: Maybe use demangled function name?
 		// Is it desired for names from IDA?
 
+		dataflow->setCallingConvention(configFnc->callingConvention.getID());
 		return;
 	}
 
-	// Calling convention.
-	if (configFnc)
+	// Main
+	//
+	if (fnc->getName() == "main")
 	{
-		dataflow->setCallingConvention(configFnc->callingConvention.getID());
+		auto charPointer = PointerType::get(
+			Type::getInt8Ty(_module->getContext()), 0);
+
+		dataflow->setArgTypes(
+		{
+			_abi->getDefaultType(),
+			PointerType::get(charPointer, 0)
+		},
+		{
+			"argc",
+			"argv"
+		});
+
+		dataflow->setRetType(_abi->getDefaultType());
+		return;
 	}
 
 	// Wrappers.
