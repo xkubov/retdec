@@ -591,6 +591,7 @@ GlobalVariable* IrModifier::getGlobalVariable(
 		bool strict,
 		std::string name)
 {
+	retdec::utils::appendHex(name, addr);
 	if (auto* gv = _config->getLlvmGlobalVariable(name, addr))
 	{
 		return gv;
@@ -600,8 +601,6 @@ GlobalVariable* IrModifier::getGlobalVariable(
 	{
 		return nullptr;
 	}
-
-	retdec::utils::appendHex(name, addr);
 
 	Constant* c = nullptr;
 	Type* t = Abi::getDefaultType(_module);
