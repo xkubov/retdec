@@ -761,7 +761,6 @@ Instruction* IrModifier::getElement(llvm::Value* v, const std::vector<Value*> &i
 
 void IrModifier::replaceElementWithStrIdx(llvm::Value* element, llvm::Value* str, std::size_t idx)
 {
-	auto elementType = dyn_cast<PointerType>(element->getType())->getElementType();
 	auto structType = dyn_cast<PointerType>(str->getType())->getElementType();
 	std::vector<User*> uses;
 
