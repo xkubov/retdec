@@ -317,12 +317,11 @@ void ParamReturn::collectExtraData(DataFlowEntry* dataflow) const
 
 		// TODO: Maybe use demangled function name?
 		// Would it be useful for names from debug info?
-		return;
 	}
 
 	// Main
 	//
-	else if (fnc->getName().str() == "main")
+	if (!dataflow->argNames().size() && fnc->getName().str() == "main")
 	{
 		auto charPointer = PointerType::get(
 			Type::getInt8Ty(_module->getContext()), 0);
