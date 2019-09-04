@@ -1624,6 +1624,23 @@ void Capstone2LlvmIrTranslatorMips_impl::translateOr(cs_insn* i, cs_mips* mi, ll
 	EXPECT_IS_BINARY_OR_TERNARY(i, mi, irb);
 
 	std::tie(op1, op2) = loadOpBinaryOrTernaryOp1Op2(mi, irb, eOpConv::ZEXT_TRUNC);
+
+	if (!op1->getType()->isIntegerTy())
+	{
+		auto size = _module->getDataLayout().getTypeStoreSizeInBits(op1->getType());
+		auto* intTy = irb.getIntNTy(size);
+
+		op1 = irb.CreateBitCast(op1, intTy);
+	}
+
+	if (!op2->getType()->isIntegerTy())
+	{
+		auto size = _module->getDataLayout().getTypeStoreSizeInBits(op2->getType());
+		auto* intTy = irb.getIntNTy(size);
+
+		op2 = irb.CreateBitCast(op2, intTy);
+	}
+
 	auto* o = irb.CreateOr(op1, op2);
 	storeOp(mi->operands[0], o, irb);
 }
