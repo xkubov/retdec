@@ -37,7 +37,8 @@ class Function : public retdec::common::AddressRange
 	public:
 		enum eLinkType
 		{
-			USER_DEFINED = 0,
+			DECOMPILER_DEFINED,
+			USER_DEFINED,
 			STATICALLY_LINKED,
 			DYNAMICALLY_LINKED,
 			SYSCALL,
@@ -53,6 +54,7 @@ class Function : public retdec::common::AddressRange
 
 		/// @name Function query methods.
 		/// @{
+		bool isDecompilerDefined() const;
 		bool isUserDefined() const;
 		bool isStaticallyLinked() const;
 		bool isDynamicallyLinked() const;
@@ -80,6 +82,7 @@ class Function : public retdec::common::AddressRange
 		void setWrappedFunctionName(const std::string& n);
 		void setStartLine(const retdec::common::Address& l);
 		void setEndLine(const retdec::common::Address& l);
+		void setIsDecompilerDefined();
 		void setIsUserDefined();
 		void setIsStaticallyLinked() const;
 		void setIsDynamicallyLinked() const;
@@ -134,7 +137,7 @@ class Function : public retdec::common::AddressRange
 		std::string _declarationString;
 		std::string _sourceFileName;
 		std::string _wrapperdFunctionName;
-		mutable eLinkType _linkType = USER_DEFINED;
+		mutable eLinkType _linkType = DECOMPILER_DEFINED;
 		LineNumber _startLine;
 		LineNumber _endLine;
 		bool _fromDebug = false;
